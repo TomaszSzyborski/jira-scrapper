@@ -22,7 +22,7 @@ class ReportConfig:
     max_retries: int = 3
     backoff_factor: int = 2
     requests_per_minute: int = 60
-    batch_size: int = 100
+    batch_size: int = 1000
     cache_enabled: bool = False
     cache_ttl: int = 3600  # seconds
 

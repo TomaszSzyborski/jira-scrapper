@@ -48,7 +48,7 @@ class IssueTrendsChart:
         end_date: str
     ) -> pl.DataFrame:
         """
-        Calculate daily metrics for issues raised, closed, and open.
+        Calculate daily metrics for issues raised and closed.
 
         Args:
             start_date: Start date in YYYY-MM-DD format
@@ -82,25 +82,10 @@ class IssueTrendsChart:
                 (pl.col("resolved").dt.date() == current_date.date())
             ).height
 
-            # Total issues created up to this day
-            total_created = self.df.filter(
-                pl.col("created") <= current_date
-            ).height
-
-            # Total issues resolved up to this day
-            total_resolved = self.df.filter(
-                (pl.col("resolved").is_not_null()) &
-                (pl.col("resolved") <= current_date)
-            ).height
-
-            # Open issues at end of this day
-            open_issues = total_created - total_resolved
-
             daily_metrics.append({
                 "date": current_date,
                 "issues_raised": raised,
                 "issues_closed": closed,
-                "open_issues": open_issues,
             })
 
         return pl.DataFrame(daily_metrics)
@@ -137,7 +122,7 @@ class IssueTrendsChart:
         title: str = "Daily Issue Trends"
     ) -> str:
         """
-        Create combined chart with all three metrics and trend lines.
+        Create combined chart with raised and closed metrics and trend lines.
 
         Args:
             start_date: Start date in YYYY-MM-DD format
@@ -152,12 +137,10 @@ class IssueTrendsChart:
         dates = metrics_df["date"].to_list()
         raised = metrics_df["issues_raised"].to_list()
         closed = metrics_df["issues_closed"].to_list()
-        open_issues = metrics_df["open_issues"].to_list()
 
         # Calculate trend lines
         raised_trend = self.calculate_trend_line(dates, raised)
         closed_trend = self.calculate_trend_line(dates, closed)
-        open_trend = self.calculate_trend_line(dates, open_issues)
 
         # Create figure
         fig = go.Figure()
@@ -198,24 +181,6 @@ class IssueTrendsChart:
             showlegend=True,
         ))
 
-        # Open Issues
-        fig.add_trace(go.Scatter(
-            x=dates,
-            y=open_issues,
-            name="Open Issues",
-            mode="lines+markers",
-            line=dict(color="#e74c3c", width=2),
-            marker=dict(size=4),
-        ))
-        fig.add_trace(go.Scatter(
-            x=dates,
-            y=open_trend,
-            name="Open Trend",
-            mode="lines",
-            line=dict(color="#e74c3c", width=2, dash="dash"),
-            showlegend=True,
-        ))
-
         # Update layout
         fig.update_layout(
             title=title,
@@ -241,7 +206,7 @@ class IssueTrendsChart:
         end_date: str
     ) -> Dict[str, str]:
         """
-        Create three separate charts for each metric with trend lines.
+        Create two separate charts for each metric with trend lines.
 
         Args:
             start_date: Start date in YYYY-MM-DD format
@@ -255,12 +220,10 @@ class IssueTrendsChart:
         dates = metrics_df["date"].to_list()
         raised = metrics_df["issues_raised"].to_list()
         closed = metrics_df["issues_closed"].to_list()
-        open_issues = metrics_df["open_issues"].to_list()
 
         # Calculate trend lines
         raised_trend = self.calculate_trend_line(dates, raised)
         closed_trend = self.calculate_trend_line(dates, closed)
-        open_trend = self.calculate_trend_line(dates, open_issues)
 
         charts = {}
 
@@ -314,31 +277,6 @@ class IssueTrendsChart:
         )
         charts["closed"] = fig_closed.to_html(full_html=False, include_plotlyjs="cdn")
 
-        # Open Issues Chart
-        fig_open = go.Figure()
-        fig_open.add_trace(go.Scatter(
-            x=dates, y=open_issues,
-            name="Open Issues",
-            mode="lines+markers",
-            line=dict(color="#e74c3c", width=2),
-            marker=dict(size=6),
-        ))
-        fig_open.add_trace(go.Scatter(
-            x=dates, y=open_trend,
-            name="Trend",
-            mode="lines",
-            line=dict(color="#e74c3c", width=2, dash="dash"),
-        ))
-        fig_open.update_layout(
-            title="Open Issues Day by Day",
-            xaxis_title="Date",
-            yaxis_title="Open Issues",
-            hovermode="x unified",
-            template="plotly_white",
-            height=400,
-        )
-        charts["open"] = fig_open.to_html(full_html=False, include_plotlyjs="cdn")
-
         return charts
 
     def get_summary_statistics(
@@ -363,7 +301,5 @@ class IssueTrendsChart:
             "total_closed": metrics_df["issues_closed"].sum(),
             "avg_raised_per_day": metrics_df["issues_raised"].mean(),
             "avg_closed_per_day": metrics_df["issues_closed"].mean(),
-            "max_open_issues": metrics_df["open_issues"].max(),
-            "min_open_issues": metrics_df["open_issues"].min(),
-            "final_open_issues": metrics_df["open_issues"][-1] if len(metrics_df) > 0 else 0,
+            "net_change": metrics_df["issues_raised"].sum() - metrics_df["issues_closed"].sum(),
         }

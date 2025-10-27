@@ -8,7 +8,7 @@ from .issue_trends_chart import IssueTrendsChart
 from .xray_test_chart import XrayTestChart
 from .bug_tracking_chart import BugTrackingChart
 from .test_execution_cumulative_chart import TestExecutionCumulativeChart
-from .open_issues_status_chart import OpenIssuesStatusChart
+from .in_progress_tracking_chart import InProgressTrackingChart
 
 
 class ReportGenerator:
@@ -106,7 +106,7 @@ class ReportGenerator:
         xray_section = ""
         bug_tracking_section = ""
         test_execution_section = ""
-        open_issues_section = ""
+        in_progress_section = ""
 
         if tickets:
             # Generate issue trends charts
@@ -225,42 +225,47 @@ class ReportGenerator:
             {test_exec_drilldown_html}
         </div>"""
 
-            # Generate open issues status chart
-            open_issues_chart = OpenIssuesStatusChart(tickets, self.jira_url)
-            open_issues_chart_html = open_issues_chart.create_open_issues_chart(
+            # Generate in progress tracking chart
+            in_progress_chart = InProgressTrackingChart(tickets, self.jira_url)
+            in_progress_chart_html = in_progress_chart.create_in_progress_chart(
                 self.start_date,
                 self.end_date,
-                "Open Issues by Status Category"
+                "Issues In Progress Day by Day"
             )
-            open_issues_stats = open_issues_chart.get_summary_statistics(
+            in_progress_drilldown_html = in_progress_chart.get_in_progress_drilldown(
+                self.start_date,
+                self.end_date
+            )
+            in_progress_stats = in_progress_chart.get_summary_statistics(
                 self.start_date,
                 self.end_date
             )
 
-            open_issues_section = f"""
+            in_progress_section = f"""
         <div class="section">
-            <h2 class="section-title">Open Issues Tracking</h2>
+            <h2 class="section-title">In Progress Tracking</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-value">{open_issues_stats['avg_open']:.1f}</div>
-                    <div class="stat-label">Avg Open Issues</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{open_issues_stats['max_open']}</div>
-                    <div class="stat-label">Max Open Issues</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{open_issues_stats['final_open']}</div>
-                    <div class="stat-label">Currently Open</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{open_issues_stats['avg_in_progress']:.1f}</div>
+                    <div class="stat-value">{in_progress_stats['avg_in_progress']:.1f}</div>
                     <div class="stat-label">Avg In Progress</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{in_progress_stats['max_in_progress']}</div>
+                    <div class="stat-label">Max In Progress</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{in_progress_stats['min_in_progress']}</div>
+                    <div class="stat-label">Min In Progress</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{in_progress_stats['final_in_progress']}</div>
+                    <div class="stat-label">Currently In Progress</div>
                 </div>
             </div>
             <div class="chart-container">
-                {open_issues_chart_html}
+                {in_progress_chart_html}
             </div>
+            {in_progress_drilldown_html}
         </div>"""
 
         return f"""<!DOCTYPE html>
@@ -278,7 +283,7 @@ class ReportGenerator:
         {self._build_header()}
         {self._build_executive_summary(summary_stats, cycle_metrics)}
         {issue_trends_section}
-        {open_issues_section}
+        {in_progress_section}
         {bug_tracking_section}
         {test_execution_section}
         {xray_section}

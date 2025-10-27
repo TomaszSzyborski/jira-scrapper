@@ -61,14 +61,6 @@ Examples:
     )
 
     parser.add_argument(
-        "--batch-size",
-        "-b",
-        type=int,
-        default=100,
-        help="Batch size for API requests (default: 100)",
-    )
-
-    parser.add_argument(
         "--test-connection",
         action="store_true",
         help="Test Jira connection and exit",
@@ -126,7 +118,7 @@ def main():
     try:
         # Initialize scraper
         print("Initializing Jira connection...")
-        scraper = JiraScraper(batch_size=args.batch_size)
+        scraper = JiraScraper()
 
         # Test connection if requested
         if args.test_connection:

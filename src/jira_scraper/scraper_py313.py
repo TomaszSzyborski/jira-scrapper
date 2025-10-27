@@ -195,7 +195,7 @@ class JiraScraper:
         project_key: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        batch_size: int = 100,
+        batch_size: int = 1000,
     ) -> List[Dict[str, Any]]:
         """
         Fetch all tickets for a project within a date range.
