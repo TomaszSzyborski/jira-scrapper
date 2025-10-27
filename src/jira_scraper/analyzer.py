@@ -9,16 +9,21 @@ from collections import defaultdict, Counter
 class JiraAnalyzer:
     """Analyzes Jira ticket data and calculates metrics."""
 
-    def __init__(self, tickets: List[Dict[str, Any]]):
+    def __init__(self, tickets: List[Dict[str, Any]], jira_url: Optional[str] = None):
         """
         Initialize analyzer with ticket data.
 
         Args:
             tickets: List of ticket dictionaries from JiraScraper
+            jira_url: Base URL of Jira instance for generating ticket links
         """
         self.tickets = tickets
         self.df: Optional[pl.DataFrame] = None
         self.transitions_df: Optional[pl.DataFrame] = None
+        self.jira_url = jira_url or ""
+        # Clean up URL (remove trailing slash)
+        if self.jira_url.endswith("/"):
+            self.jira_url = self.jira_url[:-1]
 
     def build_dataframes(self) -> Tuple[pl.DataFrame, pl.DataFrame]:
         """
@@ -177,15 +182,16 @@ class JiraAnalyzer:
 
     def _find_flow_patterns(self, top_n: int = 10) -> List[Dict[str, Any]]:
         """
-        Find most common flow patterns (sequences of status transitions).
+        Find most common flow patterns (sequences of status transitions) with ticket details.
 
         Args:
             top_n: Number of top patterns to return
 
         Returns:
-            List of common flow patterns with counts
+            List of common flow patterns with counts and ticket details
         """
         patterns = []
+        pattern_to_tickets = defaultdict(list)
 
         for ticket_key in self.transitions_df["ticket_key"].unique():
             ticket_transitions = (
@@ -206,11 +212,26 @@ class JiraAnalyzer:
                 pattern = " → ".join(pattern_list)
                 patterns.append(pattern)
 
+                # Find ticket details
+                ticket_info = next((t for t in self.tickets if t["key"] == ticket_key), None)
+                if ticket_info:
+                    pattern_to_tickets[pattern].append({
+                        "key": ticket_key,
+                        "summary": ticket_info.get("summary", ""),
+                        "status": ticket_info.get("status", ""),
+                        "priority": ticket_info.get("priority", ""),
+                        "assignee": ticket_info.get("assignee", ""),
+                    })
+
         # Count patterns
         pattern_counts = Counter(patterns)
 
         return [
-            {"pattern": pattern, "count": count}
+            {
+                "pattern": pattern,
+                "count": count,
+                "tickets": pattern_to_tickets[pattern]
+            }
             for pattern, count in pattern_counts.most_common(top_n)
         ]
 
@@ -231,17 +252,20 @@ class JiraAnalyzer:
         Returns:
             DataFrame with temporal metrics
         """
-        start = datetime.fromisoformat(start_date)
-        end = datetime.fromisoformat(end_date)
+        from datetime import timezone
+
+        # Create timezone-aware datetimes to match DataFrame columns
+        start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
 
         # Generate date range
         if granularity == "daily":
             date_range = pl.datetime_range(
-                start, end, interval="1d", eager=True
+                start, end, interval="1d", eager=True, time_zone="UTC"
             )
         else:  # weekly
             date_range = pl.datetime_range(
-                start, end, interval="1w", eager=True
+                start, end, interval="1w", eager=True, time_zone="UTC"
             )
 
         trends = []
@@ -388,41 +412,47 @@ class JiraAnalyzer:
         Returns:
             DataFrame with daily issue metrics
         """
-        start = datetime.fromisoformat(start_date)
-        end = datetime.fromisoformat(end_date)
+        from datetime import timezone
 
-        # Generate date range
-        date_range = pl.datetime_range(start, end, interval="1d", eager=True)
+        # Create timezone-aware datetimes to match DataFrame columns
+        start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+
+        # Generate date range with timezone
+        date_range = pl.datetime_range(start, end, interval="1d", eager=True, time_zone="UTC")
 
         daily_metrics = []
         for current_date in date_range:
+            # Get current date (timezone-aware)
+            current_date_tz = current_date
+
             # Issues raised on this day
             raised = self.df.filter(
-                (pl.col("created").dt.date() == current_date.date())
+                pl.col("created").dt.date() == current_date_tz.date()
             ).height
 
             # Issues closed on this day
             closed = self.df.filter(
                 (pl.col("resolved").is_not_null()) &
-                (pl.col("resolved").dt.date() == current_date.date())
+                (pl.col("resolved").dt.date() == current_date_tz.date())
             ).height
 
             # Total issues created up to this day
             total_created = self.df.filter(
-                pl.col("created") <= current_date
+                pl.col("created") <= current_date_tz
             ).height
 
             # Total issues resolved up to this day
             total_resolved = self.df.filter(
                 (pl.col("resolved").is_not_null()) &
-                (pl.col("resolved") <= current_date)
+                (pl.col("resolved") <= current_date_tz)
             ).height
 
             # Open issues at end of this day
             open_issues = total_created - total_resolved
 
             daily_metrics.append({
-                "date": current_date,
+                "date": current_date_tz,
                 "issues_raised": raised,
                 "issues_closed": closed,
                 "open_issues": open_issues,

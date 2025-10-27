@@ -5,10 +5,13 @@ Narzędzie oparte na Pythonie do scrapowania danych projektów z Jira i generowa
 ## Funkcje
 
 - **Ekstrakcja Danych Projektu**: Scraping pełnej historii projektu z Jira według nazwy projektu
-- **Analiza Przepływu Zadań**: Śledzenie przejść między statusami (W Trakcie → Do Testów → Powrót do W Trakcie, itp.)
+- **Analiza Przepływu Zadań**: Śledzenie przejść między statusami z interaktywnymi drilldown'ami
 - **Trendy Czasowe**: Analiza metryk zadań dzień po dniu lub tydzień po tygodniu między określonymi datami
-- **Interaktywne Wizualizacje**: Generowanie raportów HTML z wykresami NVD3.js i Seaborn
-- **Kompleksowe Raporty**: Wiele typów wizualizacji, w tym serie czasowe, diagramy przepływu i dystrybucje statusów
+- **Interaktywne Wizualizacje**: Generowanie raportów HTML z wykresami Plotly i NVD3.js
+- **Śledzenie Błędów**: ⭐ Nowy wykres dziennego tworzenia i zamykania błędów z trendami
+- **Postęp Testów**: ⭐ Kumulatywny wykres wykonania testów z podziałem na statusy (Passed/Failed/Executing)
+- **Status Otwartych Zadań**: ⭐ Śledzenie otwartych zadań według kategorii (In Progress/Open/Blocked)
+- **Kompleksowe Raporty**: Wiele typów wizualizacji z możliwością drilldown do konkretnych zadań
 
 ## Instalacja
 
@@ -106,6 +109,9 @@ python main.py --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --gr
 
 # Określenie własnego pliku wyjściowego
 python main.py --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --output wlasny_raport.html
+
+# Filtrowanie wykonań testów według etykiety
+python main.py --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --test-label "Sprint-1"
 ```
 
 ### Zaawansowana Konfiguracja
@@ -135,7 +141,30 @@ scraper.generate_report(
 
 ## Funkcje Raportu
 
-### 1. Analiza Przepływu Zadań
+### 1. Nowe Wykresy (⭐ Najnowsze Funkcje)
+
+#### Śledzenie Błędów
+- Dzienne wykresy słupkowe tworzenia vs zamykania błędów
+- Linie trendów dla obu metryk
+- Interaktywny drilldown pokazujący szczegóły błędów według daty
+- Statystyki podsumowujące (całkowita, średnia, obecnie otwarte)
+
+#### Postęp Wykonania Testów
+- Kumulatywny wykres warstwowy pokazujący postęp testów w czasie
+- Podział statusów: Passed, Failed, Executing, To Do, Aborted
+- Filtrowanie według etykiety (np. "Sprint-1")
+- Procent pokrycia testami
+- Drilldown z linkami do wykonań testów
+
+#### Status Otwartych Zadań
+- Wykres warstwowy otwartych zadań według kategorii statusu
+- Kategorie: In Progress, Open, Blocked
+- Linia trendu dla całkowitej liczby otwartych zadań
+- Statystyki (średnia, maksimum, obecnie otwarte)
+
+**📖 Zobacz [NEW_CHARTS_DOCUMENTATION.md](NEW_CHARTS_DOCUMENTATION.md) dla szczegółowej dokumentacji nowych wykresów.**
+
+### 2. Analiza Przepływu Zadań
 
 Scraper śledzi każde przejście statusu dla każdego zadania i dostarcza:
 
@@ -143,13 +172,14 @@ Scraper śledzi każde przejście statusu dla każdego zadania i dostarcza:
 - **Wskaźnik Odbić**: Procent zadań, które wróciły do poprzednich statusów
 - **Średni Czas w Statusie**: Czas spędzany przez zadania w każdym statusie
 - **Wspólne Wzorce**: Identyfikacja często występujących ścieżek przejść między statusami
+- **Interaktywny Drilldown**: Kliknięcie na wzorzec pokazuje listę zadań z linkami do Jira
 
 Przykładowe metryki:
 - W Trakcie → Do Testów → W Trakcie (liczba regresji)
 - Do Testów → Gotowe (pomyślny przepływ)
 - Średnia liczba dni od utworzenia do zakończenia
 
-### 2. Trendy Czasowe
+### 3. Trendy Czasowe
 
 #### Granulacja Dzienna
 - Zadania utworzone dziennie
@@ -162,7 +192,7 @@ Przykładowe metryki:
 - Analiza na poziomie sprintu (jeśli dotyczy)
 - Porównania tydzień do tygodnia
 
-### 3. Wizualizacje
+### 4. Wizualizacje
 
 Raport HTML zawiera:
 
@@ -178,7 +208,7 @@ Raport HTML zawiera:
 - **Wykresy Rozkładu**: Analiza czasu ukończenia zadań
 - **Macierze Korelacji**: Zależności między różnymi metrykami
 
-### 4. Kompleksowe Metryki
+### 5. Kompleksowe Metryki
 
 - **Przepustowość**: Zadania ukończone na okres
 - **Czas Cyklu**: Czas od rozpoczęcia do zakończenia

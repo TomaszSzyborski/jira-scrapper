@@ -20,6 +20,7 @@ Examples:
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --granularity weekly
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --output custom_report.html
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --test-label Sprint-1
         """
     )
 
@@ -71,6 +72,12 @@ Examples:
         "--test-connection",
         action="store_true",
         help="Test Jira connection and exit",
+    )
+
+    parser.add_argument(
+        "--test-label",
+        "-t",
+        help="Filter test executions by label (e.g., 'Sprint-1', 'Release-2.0')",
     )
 
     return parser.parse_args()
@@ -151,7 +158,7 @@ def main():
 
         # Analyze data
         print(f"\nAnalyzing {len(tickets)} tickets...")
-        analyzer = JiraAnalyzer(tickets)
+        analyzer = JiraAnalyzer(tickets, jira_url=scraper.jira_url)
         analyzer.build_dataframes()
 
         print("Calculating metrics...")
@@ -170,6 +177,7 @@ def main():
             project_name=args.project,
             start_date=args.start_date,
             end_date=args.end_date,
+            jira_url=scraper.jira_url,
         )
 
         output_path = report_gen.generate_html_report(
@@ -177,6 +185,8 @@ def main():
             flow_metrics=flow_metrics,
             cycle_metrics=cycle_metrics,
             temporal_trends=temporal_trends,
+            tickets=tickets,
+            test_label=args.test_label,
             output_file=args.output,
         )
 

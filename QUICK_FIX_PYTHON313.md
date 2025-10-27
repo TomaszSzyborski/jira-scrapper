@@ -1,5 +1,10 @@
 # Quick Fix for Python 3.13
 
+```bash
+python -m enusrepip --upgrade
+python -m pip install --upgrade pip setuptools
+```
+
 ## The Problem
 
 ```

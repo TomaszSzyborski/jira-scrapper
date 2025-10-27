@@ -6,12 +6,15 @@ import json
 import polars as pl
 from .issue_trends_chart import IssueTrendsChart
 from .xray_test_chart import XrayTestChart
+from .bug_tracking_chart import BugTrackingChart
+from .test_execution_cumulative_chart import TestExecutionCumulativeChart
+from .open_issues_status_chart import OpenIssuesStatusChart
 
 
 class ReportGenerator:
     """Generates HTML reports from analyzed Jira data."""
 
-    def __init__(self, project_name: str, start_date: str, end_date: str):
+    def __init__(self, project_name: str, start_date: str, end_date: str, jira_url: str = ""):
         """
         Initialize report generator.
 
@@ -19,10 +22,15 @@ class ReportGenerator:
             project_name: Jira project key
             start_date: Analysis start date
             end_date: Analysis end date
+            jira_url: Base URL of Jira instance for generating ticket links
         """
         self.project_name = project_name
         self.start_date = start_date
         self.end_date = end_date
+        self.jira_url = jira_url
+        # Clean up URL (remove trailing slash)
+        if self.jira_url and self.jira_url.endswith("/"):
+            self.jira_url = self.jira_url[:-1]
         self.report_generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def generate_html_report(
@@ -33,6 +41,7 @@ class ReportGenerator:
         temporal_trends: pl.DataFrame,
         tickets: Optional[List[Dict[str, Any]]] = None,
         xray_label: Optional[str] = None,
+        test_label: Optional[str] = None,
         output_file: str = "jira_report.html",
     ) -> str:
         """
@@ -44,7 +53,8 @@ class ReportGenerator:
             cycle_metrics: Cycle time metrics
             temporal_trends: Temporal trends DataFrame
             tickets: Raw ticket data for generating new charts
-            xray_label: Optional label for filtering Xray test executions
+            xray_label: Optional label for filtering Xray test executions (legacy)
+            test_label: Optional label for filtering test executions
             output_file: Output file path
 
         Returns:
@@ -57,6 +67,7 @@ class ReportGenerator:
             temporal_trends,
             tickets,
             xray_label,
+            test_label,
         )
 
         with open(output_file, "w", encoding="utf-8") as f:
@@ -73,6 +84,7 @@ class ReportGenerator:
         temporal_trends: pl.DataFrame,
         tickets: Optional[List[Dict[str, Any]]] = None,
         xray_label: Optional[str] = None,
+        test_label: Optional[str] = None,
     ) -> str:
         """
         Build complete HTML structure.
@@ -83,7 +95,8 @@ class ReportGenerator:
             cycle_metrics: Cycle metrics
             temporal_trends: Temporal trends data
             tickets: Raw ticket data for generating new charts
-            xray_label: Optional label for filtering Xray test executions
+            xray_label: Optional label for filtering Xray test executions (legacy)
+            test_label: Optional label for filtering test executions
 
         Returns:
             Complete HTML string
@@ -91,6 +104,9 @@ class ReportGenerator:
         # Generate new chart sections if tickets data is provided
         issue_trends_section = ""
         xray_section = ""
+        bug_tracking_section = ""
+        test_execution_section = ""
+        open_issues_section = ""
 
         if tickets:
             # Generate issue trends charts
@@ -108,15 +124,143 @@ class ReportGenerator:
             </div>
         </div>"""
 
-            # Check for Xray test executions
+            # Check for Xray test executions (legacy)
             test_executions = [t for t in tickets if t.get("issue_type") in ["Test Execution", "Test"]]
             if test_executions:
                 xray_chart = XrayTestChart(test_executions, xray_label)
                 xray_report_html = xray_chart.generate_complete_report()
                 xray_section = f"""
         <div class="section">
-            <h2 class="section-title">Xray Test Execution Progress</h2>
+            <h2 class="section-title">Xray Test Execution Progress (Legacy)</h2>
             {xray_report_html}
+        </div>"""
+
+            # Generate bug tracking chart
+            bugs = [t for t in tickets if t.get("issue_type", "").lower() in ["bug", "defect"]]
+            if bugs:
+                bug_chart = BugTrackingChart(tickets, self.jira_url)
+                bug_chart_html = bug_chart.create_bug_tracking_chart(
+                    self.start_date,
+                    self.end_date,
+                    "Daily Bug Tracking - Created vs Closed"
+                )
+                bug_details_html = bug_chart.get_bug_details_table(
+                    self.start_date,
+                    self.end_date
+                )
+                bug_stats = bug_chart.get_summary_statistics(self.start_date, self.end_date)
+
+                bug_tracking_section = f"""
+        <div class="section">
+            <h2 class="section-title">Bug Tracking</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{bug_stats['total_created']}</div>
+                    <div class="stat-label">Total Bugs Created</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{bug_stats['total_closed']}</div>
+                    <div class="stat-label">Total Bugs Closed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{bug_stats['avg_created_per_day']:.1f}</div>
+                    <div class="stat-label">Avg Created/Day</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{bug_stats['final_open_bugs']}</div>
+                    <div class="stat-label">Currently Open Bugs</div>
+                </div>
+            </div>
+            <div class="chart-container">
+                {bug_chart_html}
+            </div>
+            {bug_details_html}
+        </div>"""
+
+            # Generate test execution cumulative chart
+            if test_executions:
+                # Use test_label if provided, otherwise fall back to xray_label
+                label_filter = test_label or xray_label
+                test_exec_chart = TestExecutionCumulativeChart(
+                    test_executions,
+                    self.jira_url,
+                    target_label=label_filter
+                )
+                test_exec_chart_html = test_exec_chart.create_cumulative_chart(
+                    self.start_date,
+                    self.end_date
+                )
+                test_exec_drilldown_html = test_exec_chart.get_test_execution_drilldown(
+                    self.start_date,
+                    self.end_date
+                )
+                test_exec_summary = test_exec_chart.get_current_status_summary(self.end_date)
+
+                label_display = f" (Label: {label_filter})" if label_filter else ""
+
+                test_execution_section = f"""
+        <div class="section">
+            <h2 class="section-title">Test Execution Progress{label_display}</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{test_exec_summary['total']}</div>
+                    <div class="stat-label">Total Test Executions</div>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid #2ecc71;">
+                    <div class="stat-value">{test_exec_summary['passed']}</div>
+                    <div class="stat-label">Passed</div>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid #e74c3c;">
+                    <div class="stat-value">{test_exec_summary['failed']}</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{test_exec_summary['coverage_percent']}%</div>
+                    <div class="stat-label">Test Coverage</div>
+                </div>
+            </div>
+            <div class="chart-container">
+                {test_exec_chart_html}
+            </div>
+            {test_exec_drilldown_html}
+        </div>"""
+
+            # Generate open issues status chart
+            open_issues_chart = OpenIssuesStatusChart(tickets, self.jira_url)
+            open_issues_chart_html = open_issues_chart.create_open_issues_chart(
+                self.start_date,
+                self.end_date,
+                "Open Issues by Status Category"
+            )
+            open_issues_stats = open_issues_chart.get_summary_statistics(
+                self.start_date,
+                self.end_date
+            )
+
+            open_issues_section = f"""
+        <div class="section">
+            <h2 class="section-title">Open Issues Tracking</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{open_issues_stats['avg_open']:.1f}</div>
+                    <div class="stat-label">Avg Open Issues</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{open_issues_stats['max_open']}</div>
+                    <div class="stat-label">Max Open Issues</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{open_issues_stats['final_open']}</div>
+                    <div class="stat-label">Currently Open</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{open_issues_stats['avg_in_progress']:.1f}</div>
+                    <div class="stat-label">Avg In Progress</div>
+                </div>
+            </div>
+            <div class="chart-container">
+                {open_issues_chart_html}
+            </div>
         </div>"""
 
         return f"""<!DOCTYPE html>
@@ -134,8 +278,11 @@ class ReportGenerator:
         {self._build_header()}
         {self._build_executive_summary(summary_stats, cycle_metrics)}
         {issue_trends_section}
+        {open_issues_section}
+        {bug_tracking_section}
+        {test_execution_section}
         {xray_section}
-        {self._build_flow_analysis(flow_metrics)}
+        {self._build_flow_analysis(flow_metrics, self.jira_url)}
         {self._build_temporal_trends(temporal_trends)}
         {self._build_cycle_metrics(cycle_metrics)}
         {self._build_status_distribution(summary_stats)}
@@ -295,6 +442,116 @@ class ReportGenerator:
             color: #667eea;
             font-weight: 700;
         }
+
+        /* Flow pattern drilldown styles */
+        .pattern-row {
+            margin: 15px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .pattern-header {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: background 0.2s;
+        }
+
+        .pattern-header:hover {
+            background: #e9ecef;
+        }
+
+        .pattern-arrow {
+            color: #667eea;
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+            display: inline-block;
+            min-width: 15px;
+        }
+
+        .pattern-arrow.expanded {
+            transform: rotate(90deg);
+        }
+
+        .pattern-text {
+            flex: 1;
+            font-weight: 600;
+            color: #333;
+            font-size: 1rem;
+        }
+
+        .pattern-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .pattern-details {
+            padding: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s;
+        }
+
+        .pattern-details.expanded {
+            padding: 20px;
+            max-height: 2000px;
+        }
+
+        .ticket-list h4 {
+            margin: 0 0 15px 0;
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+
+        .ticket-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .ticket-table th {
+            background: #667eea;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .ticket-table td {
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .ticket-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .ticket-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .ticket-link:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        .ticket-table tr:last-child td {
+            border-bottom: none;
+        }
     </style>"""
 
     def _build_header(self) -> str:
@@ -355,8 +612,8 @@ class ReportGenerator:
         </div>
     </div>"""
 
-    def _build_flow_analysis(self, flow_metrics: Dict[str, Any]) -> str:
-        """Build flow analysis section."""
+    def _build_flow_analysis(self, flow_metrics: Dict[str, Any], jira_url: str = "") -> str:
+        """Build flow analysis section with ticket drilldown."""
         if "error" in flow_metrics:
             return f"""
     <div class="section">
@@ -369,10 +626,51 @@ class ReportGenerator:
 
         patterns_html = ""
         if patterns:
-            patterns_html = "<h3>Most Common Flow Patterns</h3><table><tr><th>Pattern</th><th>Count</th></tr>"
-            for pattern in patterns[:10]:
-                patterns_html += f"<tr><td>{pattern['pattern']}</td><td>{pattern['count']}</td></tr>"
-            patterns_html += "</table>"
+            patterns_html = '<h3>Most Common Flow Patterns</h3>'
+            patterns_html += '<p style="font-size: 0.9rem; color: #666; margin-bottom: 15px;">Click on a pattern to see the tickets</p>'
+
+            for idx, pattern in enumerate(patterns[:10]):
+                pattern_text = pattern['pattern']
+                pattern_count = pattern['count']
+                tickets = pattern.get('tickets', [])
+
+                # Create ticket list HTML
+                ticket_list_html = ""
+                if tickets:
+                    ticket_list_html = '<div class="ticket-list">'
+                    ticket_list_html += f'<h4>Tickets following pattern: {pattern_text} ({len(tickets)} tickets)</h4>'
+                    ticket_list_html += '<table class="ticket-table">'
+                    ticket_list_html += '<tr><th>Key</th><th>Summary</th><th>Status</th><th>Priority</th><th>Assignee</th></tr>'
+
+                    for ticket in tickets:
+                        ticket_key = ticket['key']
+                        ticket_link = f"{jira_url}/browse/{ticket_key}" if jira_url else "#"
+                        ticket_summary = ticket['summary'][:80] + "..." if len(ticket['summary']) > 80 else ticket['summary']
+
+                        ticket_list_html += f'''
+                        <tr>
+                            <td><a href="{ticket_link}" target="_blank" class="ticket-link">{ticket_key}</a></td>
+                            <td>{ticket_summary}</td>
+                            <td>{ticket['status']}</td>
+                            <td>{ticket['priority'] or 'N/A'}</td>
+                            <td>{ticket['assignee'] or 'Unassigned'}</td>
+                        </tr>'''
+
+                    ticket_list_html += '</table></div>'
+
+                # Create collapsible pattern row
+                patterns_html += f'''
+                <div class="pattern-row">
+                    <div class="pattern-header" onclick="togglePattern('pattern-{idx}')">
+                        <span class="pattern-arrow">▶</span>
+                        <span class="pattern-text">{pattern_text}</span>
+                        <span class="pattern-count">{pattern_count} tickets</span>
+                    </div>
+                    <div id="pattern-{idx}" class="pattern-details" style="display: none;">
+                        {ticket_list_html}
+                    </div>
+                </div>
+                '''
 
         return f"""
     <div class="section">
@@ -551,5 +849,21 @@ class ReportGenerator:
             }};
 
             Plotly.newPlot('flowChart', flowData, flowLayout);
+        }}
+
+        // Toggle pattern drilldown
+        function togglePattern(patternId) {{
+            const details = document.getElementById(patternId);
+            const arrow = details.previousElementSibling.querySelector('.pattern-arrow');
+
+            if (details.style.display === 'none' || details.style.display === '') {{
+                details.style.display = 'block';
+                details.classList.add('expanded');
+                arrow.classList.add('expanded');
+            }} else {{
+                details.style.display = 'none';
+                details.classList.remove('expanded');
+                arrow.classList.remove('expanded');
+            }}
         }}
     </script>"""

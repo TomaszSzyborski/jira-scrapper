@@ -9,6 +9,9 @@ from .analyzer import JiraAnalyzer
 from .report_generator import ReportGenerator
 from .issue_trends_chart import IssueTrendsChart
 from .xray_test_chart import XrayTestChart
+from .bug_tracking_chart import BugTrackingChart
+from .test_execution_cumulative_chart import TestExecutionCumulativeChart
+from .open_issues_status_chart import OpenIssuesStatusChart
 from .models import ReportConfig, Ticket, StatusTransition, FlowMetrics, CycleMetrics
 
 __all__ = [
@@ -17,6 +20,9 @@ __all__ = [
     "ReportGenerator",
     "IssueTrendsChart",
     "XrayTestChart",
+    "BugTrackingChart",
+    "TestExecutionCumulativeChart",
+    "OpenIssuesStatusChart",
     "ReportConfig",
     "Ticket",
     "StatusTransition",

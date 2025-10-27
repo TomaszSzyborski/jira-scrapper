@@ -57,20 +57,23 @@ class IssueTrendsChart:
         Returns:
             DataFrame with daily metrics
         """
+        from datetime import timezone
+
         if self.df is None:
             self.build_dataframe()
 
-        start = datetime.fromisoformat(start_date)
-        end = datetime.fromisoformat(end_date)
+        # Create timezone-aware datetimes to match DataFrame columns
+        start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
 
-        # Generate date range
-        date_range = pl.datetime_range(start, end, interval="1d", eager=True)
+        # Generate date range with timezone
+        date_range = pl.datetime_range(start, end, interval="1d", eager=True, time_zone="UTC")
 
         daily_metrics = []
         for current_date in date_range:
             # Issues raised on this day
             raised = self.df.filter(
-                (pl.col("created").dt.date() == current_date.date())
+                pl.col("created").dt.date() == current_date.date()
             ).height
 
             # Issues closed on this day
