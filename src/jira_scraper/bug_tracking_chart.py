@@ -34,8 +34,9 @@ class BugTrackingChart:
         """
         bug_records = []
         for ticket in self.tickets:
-            # Only include bugs
-            if ticket.get("issue_type", "").lower() in ["bug", "defect"]:
+            # Only include bugs (English and Polish)
+            issue_type = ticket.get("issue_type", "")
+            if issue_type.lower() in ["bug", "defect"] or issue_type == "Błąd w programie":
                 bug_records.append({
                     "key": ticket["key"],
                     "summary": ticket["summary"],

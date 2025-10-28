@@ -1,4 +1,4 @@
-"""In Progress tracking chart - tracks issues that were in progress on each date."""
+"""In Progress tracking chart - tracks issues NOT in Done status category on each date."""
 
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
@@ -8,20 +8,19 @@ import numpy as np
 
 
 class InProgressTrackingChart:
-    """Generates charts for tracking issues that were in progress day by day."""
+    """Generates charts for tracking issues not in Done status category day by day."""
 
-    # Status mappings for "in progress" states
-    IN_PROGRESS_STATUSES = [
-        "In Progress",
-        "In Development",
-        "In Review",
-        "Code Review",
-        "Testing",
-        "QA",
-        "In Testing",
-        "Developing",
-        "Work In Progress",
-        "WIP",
+    # Status category mappings for "Done"
+    DONE_STATUSES = [
+        "Done",
+        "Closed",
+        "Resolved",
+        "Complete",
+        "Completed",
+        "Finished",
+        "Cancelled",
+        "Canceled",
+        "Rejected",
     ]
 
     def __init__(self, tickets: List[Dict[str, Any]], jira_url: str = ""):
@@ -38,65 +37,83 @@ class InProgressTrackingChart:
             self.jira_url = self.jira_url[:-1]
         self.df: Optional[pl.DataFrame] = None
 
-    def _was_in_progress_on_date(self, ticket: Dict[str, Any], target_date: datetime) -> bool:
+    def _was_not_done_on_date(self, ticket: Dict[str, Any], target_date: datetime) -> bool:
         """
-        Check if a ticket was in progress state on a specific date.
-        
-        This checks the changelog to determine if the ticket was in an "in progress" status
-        on the target date.
+        Check if a ticket was NOT in Done status category on a specific date.
+
+        This checks if statusCategory != Done on the target date.
 
         Args:
             ticket: Ticket dictionary
             target_date: Date to check (timezone-aware)
 
         Returns:
-            True if ticket was in progress on that date
+            True if ticket was not done (in progress) on that date
         """
+        # Check if ticket was created before or on target date
+        created = datetime.fromisoformat(ticket["created"].replace("Z", "+00:00"))
+        if created.date() > target_date.date():
+            return False  # Ticket didn't exist yet
+
+        # Check if ticket was resolved after target date (or not resolved at all)
+        resolved = ticket.get("resolved")
+        if resolved:
+            resolved_date = datetime.fromisoformat(resolved.replace("Z", "+00:00"))
+            if resolved_date.date() <= target_date.date():
+                # Check if resolved status is actually "Done"
+                status = ticket.get("status", "")
+                if self._is_done_status(status):
+                    return False  # Was already done
+
         # Get status history from changelog
         status_history = ticket.get("status_history", [])
-        
+
         if not status_history:
-            # If no history, check current status and created date
+            # If no history, check current status
             current_status = ticket.get("status", "")
-            created = datetime.fromisoformat(ticket["created"].replace("Z", "+00:00"))
-            
-            if created.date() <= target_date.date():
-                return self._is_in_progress_status(current_status)
-            return False
-        
+            status_category = ticket.get("status_category", "")
+
+            # Check status category first
+            if status_category and status_category.lower() == "done":
+                return False
+
+            # Fallback to status name
+            return not self._is_done_status(current_status)
+
         # Find the status at the target date
         status_at_date = None
         for history_entry in sorted(status_history, key=lambda x: x["changed_at"]):
             changed_at = datetime.fromisoformat(history_entry["changed_at"].replace("Z", "+00:00"))
-            
+
             if changed_at.date() <= target_date.date():
                 status_at_date = history_entry["to_status"]
             else:
                 break
-        
+
         if status_at_date is None:
             # No status change before target date, use current status
             status_at_date = ticket.get("status", "")
-        
-        return self._is_in_progress_status(status_at_date)
 
-    def _is_in_progress_status(self, status: str) -> bool:
+        # Check if status at that date was NOT done
+        return not self._is_done_status(status_at_date)
+
+    def _is_done_status(self, status: str) -> bool:
         """
-        Check if a status is considered "in progress".
+        Check if a status is considered "Done" category.
 
         Args:
             status: Status string
 
         Returns:
-            True if status is in progress
+            True if status is in Done category
         """
         # Check exact matches
-        if status in self.IN_PROGRESS_STATUSES:
+        if status in self.DONE_STATUSES:
             return True
-        
+
         # Heuristic detection
         status_lower = status.lower()
-        keywords = ["progress", "development", "develop", "review", "testing", "wip", "working"]
+        keywords = ["done", "closed", "resolved", "complete", "finish", "cancel", "reject"]
         return any(keyword in status_lower for keyword in keywords)
 
     def calculate_daily_in_progress(
@@ -123,15 +140,15 @@ class InProgressTrackingChart:
         tickets_by_date = {}
 
         for current_date in date_range:
-            # Count tickets that were in progress on this date
+            # Count tickets that were NOT done on this date (statusCategory != Done)
             in_progress_tickets = []
-            
+
             for ticket in self.tickets:
                 # Skip test executions
                 if ticket.get("issue_type") in ["Test Execution", "Test"]:
                     continue
-                
-                if self._was_in_progress_on_date(ticket, current_date):
+
+                if self._was_not_done_on_date(ticket, current_date):
                     in_progress_tickets.append(ticket["key"])
             
             count = len(in_progress_tickets)
@@ -165,10 +182,10 @@ class InProgressTrackingChart:
         self,
         start_date: str,
         end_date: str,
-        title: str = "Issues In Progress Day by Day"
+        title: str = "Issues Not Done (statusCategory != Done) Day by Day"
     ) -> str:
         """
-        Create chart showing issues in progress each day.
+        Create chart showing issues not in Done status category each day.
 
         Args:
             start_date: Start date in YYYY-MM-DD format
@@ -192,15 +209,15 @@ class InProgressTrackingChart:
         # Create figure
         fig = go.Figure()
 
-        # In Progress line
+        # Not Done line
         fig.add_trace(go.Scatter(
             x=dates,
             y=in_progress,
-            name="In Progress",
+            name="Not Done (In Progress)",
             mode="lines+markers",
             line=dict(color="#f39c12", width=2),
             marker=dict(size=4),
-            hovertemplate="<b>%{x|%Y-%m-%d}</b><br>In Progress: %{y}<extra></extra>",
+            hovertemplate="<b>%{x|%Y-%m-%d}</b><br>Not Done: %{y}<extra></extra>",
         ))
 
         # Trend line
@@ -217,7 +234,7 @@ class InProgressTrackingChart:
         fig.update_layout(
             title=title,
             xaxis_title="Date",
-            yaxis_title="Number of Issues In Progress",
+            yaxis_title="Number of Issues Not Done",
             hovermode="x unified",
             template="plotly_white",
             height=500,

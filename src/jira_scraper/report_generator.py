@@ -9,6 +9,8 @@ from .xray_test_chart import XrayTestChart
 from .bug_tracking_chart import BugTrackingChart
 from .test_execution_cumulative_chart import TestExecutionCumulativeChart
 from .in_progress_tracking_chart import InProgressTrackingChart
+from .status_category_chart import StatusCategoryChart
+from .translations import Translations, get_translations_json
 
 
 class ReportGenerator:
@@ -107,6 +109,7 @@ class ReportGenerator:
         bug_tracking_section = ""
         test_execution_section = ""
         in_progress_section = ""
+        status_category_section = ""
 
         if tickets:
             # Generate issue trends charts
@@ -118,7 +121,7 @@ class ReportGenerator:
             )
             issue_trends_section = f"""
         <div class="section">
-            <h2 class="section-title">Daily Issue Trends</h2>
+            <h2 class="section-title" data-i18n="daily_issue_trends">Daily Issue Trends</h2>
             <div class="chart-container">
                 {combined_chart_html}
             </div>
@@ -131,12 +134,12 @@ class ReportGenerator:
                 xray_report_html = xray_chart.generate_complete_report()
                 xray_section = f"""
         <div class="section">
-            <h2 class="section-title">Xray Test Execution Progress (Legacy)</h2>
+            <h2 class="section-title" data-i18n="xray_test_execution">Xray Test Execution Progress (Legacy)</h2>
             {xray_report_html}
         </div>"""
 
             # Generate bug tracking chart
-            bugs = [t for t in tickets if t.get("issue_type", "").lower() in ["bug", "defect"]]
+            bugs = [t for t in tickets if t.get("issue_type", "").lower() in ["bug", "defect"] or t.get("issue_type") == "Błąd w programie"]
             if bugs:
                 bug_chart = BugTrackingChart(tickets, self.jira_url)
                 bug_chart_html = bug_chart.create_bug_tracking_chart(
@@ -152,15 +155,15 @@ class ReportGenerator:
 
                 bug_tracking_section = f"""
         <div class="section">
-            <h2 class="section-title">Bug Tracking</h2>
+            <h2 class="section-title" data-i18n="bug_tracking">Bug Tracking</h2>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-value">{bug_stats['total_created']}</div>
-                    <div class="stat-label">Total Bugs Created</div>
+                    <div class="stat-label" data-i18n="total_bugs_created">Total Bugs Created</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">{bug_stats['total_closed']}</div>
-                    <div class="stat-label">Total Bugs Closed</div>
+                    <div class="stat-label" data-i18n="total_bugs_closed">Total Bugs Closed</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">{bug_stats['avg_created_per_day']:.1f}</div>
@@ -168,7 +171,7 @@ class ReportGenerator:
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">{bug_stats['final_open_bugs']}</div>
-                    <div class="stat-label">Currently Open Bugs</div>
+                    <div class="stat-label" data-i18n="currently_open_bugs">Currently Open Bugs</div>
                 </div>
             </div>
             <div class="chart-container">
@@ -200,23 +203,23 @@ class ReportGenerator:
 
                 test_execution_section = f"""
         <div class="section">
-            <h2 class="section-title">Test Execution Progress{label_display}</h2>
+            <h2 class="section-title" data-i18n="test_execution_progress">Test Execution Progress{label_display}</h2>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-value">{test_exec_summary['total']}</div>
-                    <div class="stat-label">Total Test Executions</div>
+                    <div class="stat-label" data-i18n="total_test_executions">Total Test Executions</div>
                 </div>
                 <div class="stat-card" style="border-left: 4px solid #2ecc71;">
                     <div class="stat-value">{test_exec_summary['passed']}</div>
-                    <div class="stat-label">Passed</div>
+                    <div class="stat-label" data-i18n="passed">Passed</div>
                 </div>
                 <div class="stat-card" style="border-left: 4px solid #e74c3c;">
                     <div class="stat-value">{test_exec_summary['failed']}</div>
-                    <div class="stat-label">Failed</div>
+                    <div class="stat-label" data-i18n="failed">Failed</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">{test_exec_summary['coverage_percent']}%</div>
-                    <div class="stat-label">Test Coverage</div>
+                    <div class="stat-value">{test_exec_summary['remaining']}</div>
+                    <div class="stat-label" data-i18n="remaining">Remaining</div>
                 </div>
             </div>
             <div class="chart-container">
@@ -243,29 +246,67 @@ class ReportGenerator:
 
             in_progress_section = f"""
         <div class="section">
-            <h2 class="section-title">In Progress Tracking</h2>
+            <h2 class="section-title" data-i18n="in_progress_tracking">In Progress Tracking</h2>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-value">{in_progress_stats['avg_in_progress']:.1f}</div>
-                    <div class="stat-label">Avg In Progress</div>
+                    <div class="stat-label" data-i18n="avg_in_progress">Avg In Progress</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">{in_progress_stats['max_in_progress']}</div>
-                    <div class="stat-label">Max In Progress</div>
+                    <div class="stat-label" data-i18n="max_in_progress">Max In Progress</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">{in_progress_stats['min_in_progress']}</div>
-                    <div class="stat-label">Min In Progress</div>
+                    <div class="stat-label" data-i18n="min_in_progress">Min In Progress</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">{in_progress_stats['final_in_progress']}</div>
-                    <div class="stat-label">Currently In Progress</div>
+                    <div class="stat-label" data-i18n="currently_in_progress">Currently In Progress</div>
                 </div>
             </div>
             <div class="chart-container">
                 {in_progress_chart_html}
             </div>
             {in_progress_drilldown_html}
+        </div>"""
+
+            # Generate status category distribution chart
+            status_cat_chart = StatusCategoryChart(tickets, self.jira_url)
+            status_cat_chart_html = status_cat_chart.create_status_category_chart(
+                self.start_date,
+                self.end_date,
+                "Status Category Distribution Day by Day"
+            )
+            status_cat_stats = status_cat_chart.get_summary_statistics(
+                self.start_date,
+                self.end_date
+            )
+
+            status_category_section = f"""
+        <div class="section">
+            <h2 class="section-title" data-i18n="status_category_distribution">Status Category Distribution</h2>
+            <div class="stats-grid">
+                <div class="stat-card" style="border-left: 4px solid #95a5a6;">
+                    <div class="stat-value">{status_cat_stats['avg_todo']:.1f}</div>
+                    <div class="stat-label" data-i18n="avg_todo">Avg To Do</div>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid #f39c12;">
+                    <div class="stat-value">{status_cat_stats['avg_in_progress']:.1f}</div>
+                    <div class="stat-label" data-i18n="avg_in_progress">Avg In Progress</div>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid #2ecc71;">
+                    <div class="stat-value">{status_cat_stats['avg_done']:.1f}</div>
+                    <div class="stat-label" data-i18n="avg_done">Avg Done</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{status_cat_stats['final_todo'] + status_cat_stats['final_in_progress']}</div>
+                    <div class="stat-label" data-i18n="currently_not_done">Currently Not Done</div>
+                </div>
+            </div>
+            <div class="chart-container">
+                {status_cat_chart_html}
+            </div>
         </div>"""
 
         return f"""<!DOCTYPE html>
@@ -283,6 +324,7 @@ class ReportGenerator:
         {self._build_header()}
         {self._build_executive_summary(summary_stats, cycle_metrics)}
         {issue_trends_section}
+        {status_category_section}
         {in_progress_section}
         {bug_tracking_section}
         {test_execution_section}
@@ -327,6 +369,13 @@ class ReportGenerator:
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-content {
+            flex: 1;
             text-align: center;
         }
 
@@ -339,6 +388,34 @@ class ReportGenerator:
         .header .subtitle {
             font-size: 1.1rem;
             opacity: 0.9;
+        }
+
+        .language-switcher {
+            display: flex;
+            gap: 8px;
+        }
+
+        .lang-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .lang-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .lang-btn.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
         }
 
         .section {
@@ -563,11 +640,17 @@ class ReportGenerator:
         """Build report header."""
         return f"""
     <div class="header">
-        <h1>Jira Analytics Report</h1>
-        <div class="subtitle">
-            Project: {self.project_name} |
-            Period: {self.start_date} to {self.end_date} |
-            Generated: {self.report_generated_at}
+        <div class="header-content">
+            <h1 data-i18n="report_title">Jira Report</h1>
+            <div class="subtitle">
+                <span data-i18n="project">Project</span>: {self.project_name} |
+                <span data-i18n="date_range">Date Range</span>: {self.start_date} to {self.end_date} |
+                <span data-i18n="generated_at">Generated</span>: {self.report_generated_at}
+            </div>
+        </div>
+        <div class="language-switcher">
+            <button class="lang-btn active" data-lang="en" onclick="switchLanguage('en')">EN</button>
+            <button class="lang-btn" data-lang="pl" onclick="switchLanguage('pl')">PL</button>
         </div>
     </div>"""
 
@@ -584,35 +667,35 @@ class ReportGenerator:
 
         return f"""
     <div class="section">
-        <h2 class="section-title">Executive Summary</h2>
+        <h2 class="section-title" data-i18n="executive_summary">Executive Summary</h2>
         <div class="stats-grid">
             <div class="stat-card">
-                <h3>Total Tickets</h3>
+                <h3 data-i18n="total_tickets">Total Tickets</h3>
                 <div class="value">{total}</div>
             </div>
             <div class="stat-card">
-                <h3>Resolved</h3>
+                <h3 data-i18n="resolved_tickets">Resolved</h3>
                 <div class="value">{resolved}</div>
                 <div class="subvalue">{completion_rate:.1f}% completion rate</div>
             </div>
             <div class="stat-card">
-                <h3>In Progress</h3>
+                <h3 data-i18n="in_progress">In Progress</h3>
                 <div class="value">{in_progress}</div>
             </div>
             <div class="stat-card">
-                <h3>Avg Lead Time</h3>
+                <h3 data-i18n="avg_lead_time">Avg Lead Time</h3>
                 <div class="value">{cycle_metrics.get('avg_lead_time', 0):.1f}</div>
-                <div class="subvalue">days</div>
+                <div class="subvalue" data-i18n="days">days</div>
             </div>
             <div class="stat-card">
-                <h3>Avg Cycle Time</h3>
+                <h3 data-i18n="avg_cycle_time">Avg Cycle Time</h3>
                 <div class="value">{cycle_metrics.get('avg_cycle_time', 0):.1f}</div>
-                <div class="subvalue">days</div>
+                <div class="subvalue" data-i18n="days">days</div>
             </div>
             <div class="stat-card">
                 <h3>Throughput</h3>
                 <div class="value">{cycle_metrics.get('throughput', 0)}</div>
-                <div class="subvalue">tickets completed</div>
+                <div class="subvalue" data-i18n="tickets">tickets completed</div>
             </div>
         </div>
     </div>"""
@@ -622,7 +705,7 @@ class ReportGenerator:
         if "error" in flow_metrics:
             return f"""
     <div class="section">
-        <h2 class="section-title">Ticket Flow Analysis</h2>
+        <h2 class="section-title" data-i18n="flow_analysis">Ticket Flow Analysis</h2>
         <p>No transition data available for analysis.</p>
     </div>"""
 
@@ -679,7 +762,7 @@ class ReportGenerator:
 
         return f"""
     <div class="section">
-        <h2 class="section-title">Ticket Flow Analysis</h2>
+        <h2 class="section-title" data-i18n="flow_analysis">Ticket Flow Analysis</h2>
         <div class="stats-grid">
             <div class="stat-card">
                 <h3>Total Transitions</h3>
@@ -701,7 +784,7 @@ class ReportGenerator:
         """Build temporal trends section."""
         return """
     <div class="section">
-        <h2 class="section-title">Temporal Trends</h2>
+        <h2 class="section-title" data-i18n="temporal_trends">Temporal Trends</h2>
         <div class="chart-container">
             <div id="trendsChart"></div>
         </div>
@@ -711,22 +794,22 @@ class ReportGenerator:
         """Build cycle metrics section."""
         return f"""
     <div class="section">
-        <h2 class="section-title">Cycle Metrics</h2>
+        <h2 class="section-title" data-i18n="cycle_metrics">Cycle Metrics</h2>
         <div class="metric-row">
-            <span class="metric-label">Average Lead Time</span>
-            <span class="metric-value">{cycle_metrics.get('avg_lead_time', 0):.2f} days</span>
+            <span class="metric-label" data-i18n="avg_lead_time">Average Lead Time</span>
+            <span class="metric-value">{cycle_metrics.get('avg_lead_time', 0):.2f} <span data-i18n="days">days</span></span>
         </div>
         <div class="metric-row">
             <span class="metric-label">Median Lead Time</span>
-            <span class="metric-value">{cycle_metrics.get('median_lead_time', 0):.2f} days</span>
+            <span class="metric-value">{cycle_metrics.get('median_lead_time', 0):.2f} <span data-i18n="days">days</span></span>
         </div>
         <div class="metric-row">
-            <span class="metric-label">Average Cycle Time</span>
-            <span class="metric-value">{cycle_metrics.get('avg_cycle_time', 0):.2f} days</span>
+            <span class="metric-label" data-i18n="avg_cycle_time">Average Cycle Time</span>
+            <span class="metric-value">{cycle_metrics.get('avg_cycle_time', 0):.2f} <span data-i18n="days">days</span></span>
         </div>
         <div class="metric-row">
             <span class="metric-label">Median Cycle Time</span>
-            <span class="metric-value">{cycle_metrics.get('median_cycle_time', 0):.2f} days</span>
+            <span class="metric-value">{cycle_metrics.get('median_cycle_time', 0):.2f} <span data-i18n="days">days</span></span>
         </div>
     </div>"""
 
@@ -740,10 +823,10 @@ class ReportGenerator:
 
         return f"""
     <div class="section">
-        <h2 class="section-title">Status Distribution</h2>
+        <h2 class="section-title" data-i18n="status_distribution">Status Distribution</h2>
         <table>
             <tr>
-                <th>Status</th>
+                <th data-i18n="status">Status</th>
                 <th>Count</th>
             </tr>
             {rows}
@@ -871,4 +954,37 @@ class ReportGenerator:
                 arrow.classList.remove('expanded');
             }}
         }}
+
+        // Language switcher
+        const translations = {get_translations_json()};
+        let currentLang = localStorage.getItem('reportLanguage') || 'en';
+
+        function switchLanguage(lang) {{
+            currentLang = lang;
+            localStorage.setItem('reportLanguage', lang);
+            updateLanguage();
+
+            // Update language selector buttons
+            document.querySelectorAll('.lang-btn').forEach(btn => {{
+                btn.classList.remove('active');
+            }});
+            document.querySelector(`.lang-btn[data-lang="${{lang}}"]`).classList.add('active');
+        }}
+
+        function updateLanguage() {{
+            const trans = translations[currentLang];
+
+            // Update all elements with data-i18n attribute
+            document.querySelectorAll('[data-i18n]').forEach(element => {{
+                const key = element.getAttribute('data-i18n');
+                if (trans[key]) {{
+                    element.textContent = trans[key];
+                }}
+            }});
+        }}
+
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', function() {{
+            switchLanguage(currentLang);
+        }});
     </script>"""
