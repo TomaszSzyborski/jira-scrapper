@@ -161,6 +161,7 @@ class JiraScraper:
         project_key: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        label: Optional[str] = None,
         batch_size: int = 1000,
     ) -> List[Dict[str, Any]]:
         """
@@ -170,6 +171,7 @@ class JiraScraper:
             project_key: Jira project key (e.g., "PROJ")
             start_date: Start date in YYYY-MM-DD format
             end_date: End date in YYYY-MM-DD format
+            label: Optional label to filter tickets
             batch_size: Number of tickets to fetch per request
 
         Returns:
@@ -177,15 +179,27 @@ class JiraScraper:
         """
         # Use JQL query template from jql_queries.py
         if start_date and end_date:
-            jql = JQLQueries.format_query(
-                JQLQueries.PROJECT_TICKETS,
-                project=project_key,
-                start_date=start_date,
-                end_date=end_date
-            )
+            if label:
+                jql = JQLQueries.format_query(
+                    JQLQueries.PROJECT_TICKETS_WITH_LABEL,
+                    project=project_key,
+                    label=label,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            else:
+                jql = JQLQueries.format_query(
+                    JQLQueries.PROJECT_TICKETS,
+                    project=project_key,
+                    start_date=start_date,
+                    end_date=end_date
+                )
         else:
             # Fallback for no date filtering
-            jql = f'project = "{project_key}" ORDER BY created ASC'
+            if label:
+                jql = f'project = "{project_key}" AND labels = "{label}" ORDER BY created ASC'
+            else:
+                jql = f'project = "{project_key}" ORDER BY created ASC'
 
         print(f"Using JQL query: {jql}")
 
@@ -371,6 +385,7 @@ class JiraScraper:
         project_key: str,
         start_date: str,
         end_date: str,
+        label: Optional[str] = None,
         batch_size: int = 1000,
     ) -> List[Dict[str, Any]]:
         """
@@ -380,17 +395,27 @@ class JiraScraper:
             project_key: Jira project key (e.g., "PROJ")
             start_date: Start date in YYYY-MM-DD format
             end_date: End date in YYYY-MM-DD format
+            label: Optional label to filter bugs
             batch_size: Number of tickets to fetch per request
 
         Returns:
             List of bug ticket dictionaries
         """
-        jql = JQLQueries.format_query(
-            JQLQueries.BUGS_CREATED,
-            project=project_key,
-            start_date=start_date,
-            end_date=end_date
-        )
+        if label:
+            jql = JQLQueries.format_query(
+                JQLQueries.BUGS_CREATED_WITH_LABEL,
+                project=project_key,
+                label=label,
+                start_date=start_date,
+                end_date=end_date
+            )
+        else:
+            jql = JQLQueries.format_query(
+                JQLQueries.BUGS_CREATED,
+                project=project_key,
+                start_date=start_date,
+                end_date=end_date
+            )
 
         print(f"Fetching bugs with JQL: {jql}")
 

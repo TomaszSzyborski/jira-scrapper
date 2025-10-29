@@ -20,7 +20,8 @@ Examples:
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --granularity weekly
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --output custom_report.html
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --test-label Sprint-1
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1 --test-label Release-2.0
         """
     )
 
@@ -67,9 +68,23 @@ Examples:
     )
 
     parser.add_argument(
+        "--label",
+        "-l",
+        help="Filter all tickets by label in JQL queries (e.g., 'Sprint-1', 'Release-2.0')",
+    )
+
+    parser.add_argument(
         "--test-label",
         "-t",
-        help="Filter test executions by label (e.g., 'Sprint-1', 'Release-2.0')",
+        help="Filter test executions by label (e.g., 'Sprint-1', 'Release-2.0'). If not specified, uses --label",
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        "-b",
+        type=int,
+        default=1000,
+        help="Number of tickets to fetch per request (default: 1000)",
     )
 
     return parser.parse_args()
@@ -136,11 +151,16 @@ def main():
         print(f"Lead: {project_info.get('lead', 'N/A')}")
 
         # Fetch tickets
-        print(f"\nFetching tickets from {args.start_date} to {args.end_date}...")
+        if args.label:
+            print(f"\nFetching tickets from {args.start_date} to {args.end_date} with label '{args.label}'...")
+        else:
+            print(f"\nFetching tickets from {args.start_date} to {args.end_date}...")
+
         tickets = scraper.get_project_tickets(
             project_key=args.project,
             start_date=args.start_date,
             end_date=args.end_date,
+            label=args.label,
             batch_size=args.batch_size,
         )
 
@@ -172,13 +192,16 @@ def main():
             jira_url=scraper.jira_url,
         )
 
+        # Default test_label to label if not specified
+        test_label = args.test_label if args.test_label else args.label
+
         output_path = report_gen.generate_html_report(
             summary_stats=summary_stats,
             flow_metrics=flow_metrics,
             cycle_metrics=cycle_metrics,
             temporal_trends=temporal_trends,
             tickets=tickets,
-            test_label=args.test_label,
+            test_label=test_label,
             output_file=args.output,
         )
 

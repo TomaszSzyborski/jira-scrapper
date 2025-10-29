@@ -12,8 +12,12 @@ class JQLQueries:
 
     # Project-based queries
     PROJECT_TICKETS = 'project = "{project}" AND created >= "{start_date}" AND created <= "{end_date}" ORDER BY created ASC'
-    
+
+    PROJECT_TICKETS_WITH_LABEL = 'project = "{project}" AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}" ORDER BY created ASC'
+
     PROJECT_TICKETS_UPDATED = 'project = "{project}" AND updated >= "{start_date}" AND updated <= "{end_date}" ORDER BY updated ASC'
+
+    PROJECT_TICKETS_UPDATED_WITH_LABEL = 'project = "{project}" AND labels = "{label}" AND updated >= "{start_date}" AND updated <= "{end_date}" ORDER BY updated ASC'
     
     # Status-based queries
     ISSUES_IN_PROGRESS_ON_DATE = 'project = "{project}" AND status was "In Progress" ON "{date}"'
@@ -24,10 +28,16 @@ class JQLQueries:
     
     # Bug-specific queries
     BUGS_CREATED = 'project = "{project}" AND type in (Bug, Defect) AND created >= "{start_date}" AND created <= "{end_date}"'
-    
+
+    BUGS_CREATED_WITH_LABEL = 'project = "{project}" AND type in (Bug, Defect) AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}"'
+
     BUGS_RESOLVED = 'project = "{project}" AND type in (Bug, Defect) AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
-    
+
+    BUGS_RESOLVED_WITH_LABEL = 'project = "{project}" AND type in (Bug, Defect) AND labels = "{label}" AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
+
     BUGS_OPEN = 'project = "{project}" AND type in (Bug, Defect) AND resolution = Unresolved'
+
+    BUGS_OPEN_WITH_LABEL = 'project = "{project}" AND type in (Bug, Defect) AND labels = "{label}" AND resolution = Unresolved'
     
     # Test-related queries
     TEST_EXECUTIONS = 'project = "{project}" AND type = "Test Execution" AND created >= "{start_date}" AND created <= "{end_date}"'
