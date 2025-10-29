@@ -54,10 +54,14 @@ class Translations:
             "total_bugs_created": "Total Bugs Created",
             "total_bugs_closed": "Total Bugs Closed",
             "currently_open_bugs": "Currently Open Bugs",
-            "total_test_executions": "Total Test Executions",
+            "total_test_executions": "Test Executions",
+            "total_test_cases": "Total Test Cases",
+            "current_test_executions": "Current Test Executions",
+            "cumulative_test_case_statuses": "Cumulative Test Case Statuses",
             "passed": "Passed",
             "failed": "Failed",
             "remaining": "Remaining",
+            "created": "Created",
             
             # Chart Labels
             "issues_raised": "Issues Raised",
@@ -155,10 +159,14 @@ class Translations:
             "total_bugs_created": "Wszystkie błędy utworzone",
             "total_bugs_closed": "Wszystkie błędy zamknięte",
             "currently_open_bugs": "Obecnie otwarte błędy",
-            "total_test_executions": "Wszystkie wykonania testów",
+            "total_test_executions": "Wykonania testów",
+            "total_test_cases": "Wszystkie przypadki testowe",
+            "current_test_executions": "Bieżące wykonania testów",
+            "cumulative_test_case_statuses": "Skumulowane statusy przypadków testowych",
             "passed": "Zaliczone",
             "failed": "Niezaliczone",
             "remaining": "Pozostałe",
+            "created": "Utworzono",
             
             # Chart Labels
             "issues_raised": "Zadania utworzone",

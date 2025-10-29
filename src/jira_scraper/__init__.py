@@ -10,7 +10,7 @@ from .report_generator import ReportGenerator
 from .issue_trends_chart import IssueTrendsChart
 from .xray_test_chart import XrayTestChart
 from .bug_tracking_chart import BugTrackingChart
-from .test_execution_cumulative_chart import TestExecutionCumulativeChart
+from .test_execution_chart import TestExecutionChart
 from .in_progress_tracking_chart import InProgressTrackingChart
 from .status_category_chart import StatusCategoryChart
 from .models import ReportConfig, Ticket, StatusTransition, FlowMetrics, CycleMetrics
@@ -25,7 +25,7 @@ __all__ = [
     "IssueTrendsChart",
     "XrayTestChart",
     "BugTrackingChart",
-    "TestExecutionCumulativeChart",
+    "TestExecutionChart",
     "InProgressTrackingChart",
     "StatusCategoryChart",
     "JQLQueries",

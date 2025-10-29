@@ -7,7 +7,7 @@ import polars as pl
 from .issue_trends_chart import IssueTrendsChart
 from .xray_test_chart import XrayTestChart
 from .bug_tracking_chart import BugTrackingChart
-from .test_execution_cumulative_chart import TestExecutionCumulativeChart
+from .test_execution_chart import TestExecutionChart
 from .in_progress_tracking_chart import InProgressTrackingChart
 from .status_category_chart import StatusCategoryChart
 from .translations import Translations, get_translations_json
@@ -180,34 +180,40 @@ class ReportGenerator:
             {bug_details_html}
         </div>"""
 
-            # Generate test execution cumulative chart
+            # Generate test execution charts
             if test_executions:
                 # Use test_label if provided, otherwise fall back to xray_label
                 label_filter = test_label or xray_label
-                test_exec_chart = TestExecutionCumulativeChart(
+                test_exec_chart = TestExecutionChart(
                     test_executions,
                     self.jira_url,
                     target_label=label_filter
                 )
-                test_exec_chart_html = test_exec_chart.create_cumulative_chart(
-                    self.start_date,
-                    self.end_date
-                )
-                test_exec_drilldown_html = test_exec_chart.get_test_execution_drilldown(
-                    self.start_date,
-                    self.end_date
-                )
-                test_exec_summary = test_exec_chart.get_current_status_summary(self.end_date)
+
+                # Get list of current test executions
+                test_exec_list_html = test_exec_chart.get_current_test_executions_list()
+
+                # Get cumulative test case status chart
+                test_case_chart_html = test_exec_chart.create_cumulative_status_chart()
+
+                # Get summary statistics
+                test_exec_summary = test_exec_chart.get_summary_statistics()
 
                 label_display = f" (Label: {label_filter})" if label_filter else ""
 
                 test_execution_section = f"""
         <div class="section">
             <h2 class="section-title" data-i18n="test_execution_progress">Test Execution Progress{label_display}</h2>
+
+            <!-- Summary Statistics -->
             <div class="stats-grid">
                 <div class="stat-card">
+                    <div class="stat-value">{test_exec_summary['test_executions_count']}</div>
+                    <div class="stat-label" data-i18n="total_test_executions">Test Executions</div>
+                </div>
+                <div class="stat-card">
                     <div class="stat-value">{test_exec_summary['total']}</div>
-                    <div class="stat-label" data-i18n="total_test_executions">Total Test Executions</div>
+                    <div class="stat-label" data-i18n="total_test_cases">Total Test Cases</div>
                 </div>
                 <div class="stat-card" style="border-left: 4px solid #2ecc71;">
                     <div class="stat-value">{test_exec_summary['passed']}</div>
@@ -222,10 +228,17 @@ class ReportGenerator:
                     <div class="stat-label" data-i18n="remaining">Remaining</div>
                 </div>
             </div>
+
+            <!-- Cumulative Test Case Status Chart -->
+            <h3 data-i18n="cumulative_test_case_statuses">Cumulative Test Case Statuses</h3>
             <div class="chart-container">
-                {test_exec_chart_html}
+                {test_case_chart_html}
             </div>
-            {test_exec_drilldown_html}
+
+            <!-- List of Test Executions -->
+            <div style="margin-top: 30px;">
+                {test_exec_list_html}
+            </div>
         </div>"""
 
             # Generate in progress tracking chart

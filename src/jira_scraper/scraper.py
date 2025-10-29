@@ -7,6 +7,7 @@ from typing import Optional, Dict, List, Any
 from dotenv import load_dotenv
 from jira import JIRA
 from jira.exceptions import JIRAError
+from .jql_queries import JQLQueries, STANDARD_FIELDS
 
 
 class JiraScraper:
@@ -163,7 +164,7 @@ class JiraScraper:
         batch_size: int = 1000,
     ) -> List[Dict[str, Any]]:
         """
-        Fetch all tickets for a project within a date range.
+        Fetch all tickets for a project within a date range using JQL from jql_queries.py.
 
         Args:
             project_key: Jira project key (e.g., "PROJ")
@@ -174,14 +175,19 @@ class JiraScraper:
         Returns:
             List of ticket dictionaries with full details and changelog
         """
-        jql = f"project = {project_key}"
+        # Use JQL query template from jql_queries.py
+        if start_date and end_date:
+            jql = JQLQueries.format_query(
+                JQLQueries.PROJECT_TICKETS,
+                project=project_key,
+                start_date=start_date,
+                end_date=end_date
+            )
+        else:
+            # Fallback for no date filtering
+            jql = f'project = "{project_key}" ORDER BY created ASC'
 
-        if start_date:
-            jql += f" AND created >= '{start_date}'"
-        if end_date:
-            jql += f" AND created <= '{end_date}'"
-
-        jql += " ORDER BY created ASC"
+        print(f"Using JQL query: {jql}")
 
         tickets = []
         start_at = 0
@@ -359,6 +365,143 @@ class JiraScraper:
         except JIRAError as e:
             print(f"Error fetching project info: {e}")
             raise
+
+    def get_bugs(
+        self,
+        project_key: str,
+        start_date: str,
+        end_date: str,
+        batch_size: int = 1000,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch all bugs for a project within a date range using JQL from jql_queries.py.
+
+        Args:
+            project_key: Jira project key (e.g., "PROJ")
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            batch_size: Number of tickets to fetch per request
+
+        Returns:
+            List of bug ticket dictionaries
+        """
+        jql = JQLQueries.format_query(
+            JQLQueries.BUGS_CREATED,
+            project=project_key,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        print(f"Fetching bugs with JQL: {jql}")
+
+        bugs = []
+        start_at = 0
+
+        while True:
+            try:
+                results = self._retry_request(
+                    self.client.search_issues,
+                    jql,
+                    startAt=start_at,
+                    maxResults=batch_size,
+                    expand="changelog",
+                    fields="*all",
+                )
+
+                if not results:
+                    break
+
+                for issue in results:
+                    bug_data = self._extract_ticket_data(issue)
+                    bugs.append(bug_data)
+
+                print(f"Fetched {len(bugs)} bugs...")
+
+                if len(results) < batch_size:
+                    break
+
+                start_at += batch_size
+
+            except JIRAError as e:
+                print(f"Error fetching bugs: {e}")
+                raise
+
+        print(f"Total bugs fetched: {len(bugs)}")
+        return bugs
+
+    def get_test_executions(
+        self,
+        project_key: str,
+        start_date: str,
+        end_date: str,
+        label: Optional[str] = None,
+        batch_size: int = 1000,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch all test executions for a project within a date range using JQL from jql_queries.py.
+
+        Args:
+            project_key: Jira project key (e.g., "PROJ")
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            label: Optional label to filter test executions
+            batch_size: Number of tickets to fetch per request
+
+        Returns:
+            List of test execution ticket dictionaries
+        """
+        if label:
+            jql = JQLQueries.format_query(
+                JQLQueries.TEST_EXECUTIONS_WITH_LABEL,
+                project=project_key,
+                label=label,
+                start_date=start_date,
+                end_date=end_date
+            )
+        else:
+            jql = JQLQueries.format_query(
+                JQLQueries.TEST_EXECUTIONS,
+                project=project_key,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+        print(f"Fetching test executions with JQL: {jql}")
+
+        test_executions = []
+        start_at = 0
+
+        while True:
+            try:
+                results = self._retry_request(
+                    self.client.search_issues,
+                    jql,
+                    startAt=start_at,
+                    maxResults=batch_size,
+                    expand="changelog",
+                    fields="*all",
+                )
+
+                if not results:
+                    break
+
+                for issue in results:
+                    test_data = self._extract_ticket_data(issue)
+                    test_executions.append(test_data)
+
+                print(f"Fetched {len(test_executions)} test executions...")
+
+                if len(results) < batch_size:
+                    break
+
+                start_at += batch_size
+
+            except JIRAError as e:
+                print(f"Error fetching test executions: {e}")
+                raise
+
+        print(f"Total test executions fetched: {len(test_executions)}")
+        return test_executions
 
     def test_connection(self) -> bool:
         """
