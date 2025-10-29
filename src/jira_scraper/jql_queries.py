@@ -27,17 +27,17 @@ class JQLQueries:
     ISSUES_OPEN_ON_DATE = 'project = "{project}" AND created <= "{date}" AND (resolved is EMPTY OR resolved > "{date}")'
     
     # Bug-specific queries
-    BUGS_CREATED = 'project = "{project}" AND type in (Bug, Defect) AND created >= "{start_date}" AND created <= "{end_date}"'
+    BUGS_CREATED = 'project = "{project}" AND type = Bug AND created >= "{start_date}" AND created <= "{end_date}"'
 
-    BUGS_CREATED_WITH_LABEL = 'project = "{project}" AND type in (Bug, Defect) AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}"'
+    BUGS_CREATED_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}"'
 
-    BUGS_RESOLVED = 'project = "{project}" AND type in (Bug, Defect) AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
+    BUGS_RESOLVED = 'project = "{project}" AND type = Bug AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
 
-    BUGS_RESOLVED_WITH_LABEL = 'project = "{project}" AND type in (Bug, Defect) AND labels = "{label}" AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
+    BUGS_RESOLVED_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
 
-    BUGS_OPEN = 'project = "{project}" AND type in (Bug, Defect) AND resolution = Unresolved'
+    BUGS_OPEN = 'project = "{project}" AND type = Bug AND resolution = Unresolved'
 
-    BUGS_OPEN_WITH_LABEL = 'project = "{project}" AND type in (Bug, Defect) AND labels = "{label}" AND resolution = Unresolved'
+    BUGS_OPEN_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND resolution = Unresolved'
     
     # Test-related queries
     TEST_EXECUTIONS = 'project = "{project}" AND type = "Test Execution" AND created >= "{start_date}" AND created <= "{end_date}"'

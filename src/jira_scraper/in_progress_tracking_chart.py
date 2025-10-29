@@ -30,6 +30,8 @@ class InProgressTrackingChart:
         Check if a ticket was NOT in Done status category on a specific date.
 
         This checks if statusCategory != Done on the target date.
+        Note: This does NOT check creation date - tickets created before the date range
+        can still be counted if they were open on the target date.
 
         Args:
             ticket: Ticket dictionary
@@ -38,19 +40,11 @@ class InProgressTrackingChart:
         Returns:
             True if ticket was not done (open/active) on that date
         """
-        # Check if ticket was created after target date
-        created = datetime.fromisoformat(ticket["created"].replace("Z", "+00:00"))
-        if created.date() > target_date.date():
-            return False  # Ticket didn't exist yet
+        # Get changelog (status transitions)
+        changelog = ticket.get("changelog", [])
 
-        # Get status history from changelog
-        status_history = ticket.get("status_history", [])
-
-        if not status_history:
-            # If no history, check if ticket was created and what its status is
-            # Since we don't have history, we can only check current status
-            # This means if the ticket is currently done and was created before target_date,
-            # we assume it was done on target_date (not accurate but best we can do)
+        if not changelog:
+            # If no history, check current status
             current_status = ticket.get("status", "")
             status_category = ticket.get("status_category", "")
 
@@ -63,14 +57,14 @@ class InProgressTrackingChart:
         status_category_at_date = None
 
         # Sort history by date
-        sorted_history = sorted(status_history, key=lambda x: x["changed_at"])
+        sorted_history = sorted(changelog, key=lambda x: x["changed_at"])
 
         # The initial status is the "from_status" of the first transition
-        # or the current status if created before any transition
+        # Check if target_date is before the first status change
         if sorted_history:
             first_change = datetime.fromisoformat(sorted_history[0]["changed_at"].replace("Z", "+00:00"))
-            if created.date() < first_change.date():
-                # There was a status before the first transition
+            if target_date.date() < first_change.date():
+                # Target date is before first status change, use the initial status
                 status_at_date = sorted_history[0].get("from_status", ticket.get("status", ""))
 
         # Find the status on target_date by walking through history
@@ -88,6 +82,7 @@ class InProgressTrackingChart:
         # If we still don't have a status, use the initial status from first transition
         if status_at_date is None and sorted_history:
             status_at_date = sorted_history[0].get("from_status", ticket.get("status", ""))
+            status_category_at_date = sorted_history[0].get("from_status_category")
 
         # If still no status found, use current status as fallback
         if status_at_date is None:
@@ -240,13 +235,13 @@ class InProgressTrackingChart:
         Returns:
             Status string on that date
         """
-        status_history = ticket.get("status_history", [])
+        changelog = ticket.get("changelog", [])
 
-        if not status_history:
+        if not changelog:
             return ticket.get("status", "Unknown")
 
         # Sort history by date
-        sorted_history = sorted(status_history, key=lambda x: x["changed_at"])
+        sorted_history = sorted(changelog, key=lambda x: x["changed_at"])
 
         # Find status on target_date
         status_at_date = None

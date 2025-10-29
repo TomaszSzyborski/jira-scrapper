@@ -49,15 +49,10 @@ class StatusCategoryChart:
         Returns:
             Status category or None if ticket didn't exist
         """
-        # Check if ticket existed on target date
-        created = datetime.fromisoformat(ticket["created"].replace("Z", "+00:00"))
-        if created.date() > target_date.date():
-            return None  # Ticket didn't exist yet
+        # Get changelog (status transitions)
+        changelog = ticket.get("changelog", [])
 
-        # Get status history from changelog
-        status_history = ticket.get("status_history", [])
-
-        if not status_history:
+        if not changelog:
             # No history, use current status
             current_status = ticket.get("status", "")
             status_category = ticket.get("status_category", "")
@@ -65,18 +60,33 @@ class StatusCategoryChart:
 
         # Find status at target date
         status_at_date = None
-        for history_entry in sorted(status_history, key=lambda x: x["changed_at"]):
+        status_category_at_date = None
+
+        for history_entry in sorted(changelog, key=lambda x: x["changed_at"]):
             changed_at = datetime.fromisoformat(history_entry["changed_at"].replace("Z", "+00:00"))
 
             if changed_at.date() <= target_date.date():
                 status_at_date = history_entry["to_status"]
+                status_category_at_date = history_entry.get("to_status_category")
             else:
                 break
 
         if status_at_date is None:
-            # No status change before target date, use current status
-            status_at_date = ticket.get("status", "")
+            # Target date is before first status change, use initial status
+            if changelog:
+                first_change = datetime.fromisoformat(changelog[0]["changed_at"].replace("Z", "+00:00"))
+                if target_date.date() < first_change.date():
+                    status_at_date = changelog[0].get("from_status", ticket.get("status", ""))
+                    status_category_at_date = changelog[0].get("from_status_category")
 
+        if status_at_date is None:
+            # Still no status, use current status as fallback
+            status_at_date = ticket.get("status", "")
+            status_category_at_date = ticket.get("status_category")
+
+        # Use the status category from history if available, otherwise categorize the status
+        if status_category_at_date:
+            return status_category_at_date
         return self._get_status_category(status_at_date, ticket.get("status_category"))
 
     def calculate_daily_status_categories(

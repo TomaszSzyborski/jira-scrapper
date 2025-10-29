@@ -253,6 +253,7 @@ class JiraScraper:
             "summary": issue.fields.summary,
             "description": getattr(issue.fields, "description", ""),
             "status": issue.fields.status.name,
+            "status_category": issue.fields.status.statusCategory.name if hasattr(issue.fields.status, 'statusCategory') else "",
             "issue_type": issue.fields.issuetype.name,
             "priority": issue.fields.priority.name if issue.fields.priority else None,
             "created": issue.fields.created,
@@ -340,7 +341,10 @@ class JiraScraper:
 
         Returns:
             List of changelog entries with timestamps and field changes
+            Format includes: changed_at, from_status, to_status, from_status_category, to_status_category
         """
+        from .status_definitions import StatusDefinitions
+
         changelog = []
 
         if not hasattr(issue, "changelog"):
@@ -349,10 +353,20 @@ class JiraScraper:
         for history in issue.changelog.histories:
             for item in history.items:
                 if item.field == "status":
+                    from_status = item.fromString
+                    to_status = item.toString
+
+                    # Categorize statuses using StatusDefinitions
+                    from_category = StatusDefinitions.categorize_status(from_status) if from_status else ""
+                    to_category = StatusDefinitions.categorize_status(to_status) if to_status else ""
+
                     changelog.append({
-                        "timestamp": history.created,
-                        "from_status": item.fromString,
-                        "to_status": item.toString,
+                        "changed_at": history.created,  # Charts expect "changed_at" not "timestamp"
+                        "timestamp": history.created,  # Keep for backward compatibility
+                        "from_status": from_status,
+                        "to_status": to_status,
+                        "from_status_category": from_category,
+                        "to_status_category": to_category,
                         "author": history.author.displayName if history.author else "Unknown",
                     })
 
