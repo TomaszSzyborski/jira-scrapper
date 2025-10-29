@@ -397,18 +397,16 @@ class JiraScraper:
     def get_bugs(
         self,
         project_key: str,
-        start_date: str,
-        end_date: str,
         label: Optional[str] = None,
         batch_size: int = 1000,
     ) -> List[Dict[str, Any]]:
         """
-        Fetch all bugs for a project within a date range using JQL from jql_queries.py.
+        Fetch ALL bugs for a project (no date filter) using JQL from jql_queries.py.
+
+        Includes both "Bug" and "Błąd w programie" issue types.
 
         Args:
             project_key: Jira project key (e.g., "PROJ")
-            start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format
             label: Optional label to filter bugs
             batch_size: Number of tickets to fetch per request
 
@@ -417,18 +415,14 @@ class JiraScraper:
         """
         if label:
             jql = JQLQueries.format_query(
-                JQLQueries.BUGS_CREATED_WITH_LABEL,
+                JQLQueries.BUGS_ALL_WITH_LABEL,
                 project=project_key,
-                label=label,
-                start_date=start_date,
-                end_date=end_date
+                label=label
             )
         else:
             jql = JQLQueries.format_query(
-                JQLQueries.BUGS_CREATED,
-                project=project_key,
-                start_date=start_date,
-                end_date=end_date
+                JQLQueries.BUGS_ALL,
+                project=project_key
             )
 
         print(f"Fetching bugs with JQL: {jql}")
@@ -471,38 +465,30 @@ class JiraScraper:
     def get_test_executions(
         self,
         project_key: str,
-        start_date: str,
-        end_date: str,
-        label: Optional[str] = None,
+        target_label: Optional[str] = None,
         batch_size: int = 1000,
     ) -> List[Dict[str, Any]]:
         """
-        Fetch all test executions for a project within a date range using JQL from jql_queries.py.
+        Fetch ALL test executions for a project (no date filter) using JQL from jql_queries.py.
 
         Args:
             project_key: Jira project key (e.g., "PROJ")
-            start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format
-            label: Optional label to filter test executions
+            target_label: Optional label to filter test executions
             batch_size: Number of tickets to fetch per request
 
         Returns:
             List of test execution ticket dictionaries
         """
-        if label:
+        if target_label:
             jql = JQLQueries.format_query(
                 JQLQueries.TEST_EXECUTIONS_WITH_LABEL,
                 project=project_key,
-                label=label,
-                start_date=start_date,
-                end_date=end_date
+                label=target_label
             )
         else:
             jql = JQLQueries.format_query(
                 JQLQueries.TEST_EXECUTIONS,
-                project=project_key,
-                start_date=start_date,
-                end_date=end_date
+                project=project_key
             )
 
         print(f"Fetching test executions with JQL: {jql}")

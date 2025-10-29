@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
-"""Main CLI entry point for Jira Scraper & Analytics."""
+"""Main CLI entry point for Jira Bug & Test Scraper."""
 
 import argparse
 import sys
 from datetime import datetime
 
 from src.jira_scraper.scraper import JiraScraper
-from src.jira_scraper.analyzer import JiraAnalyzer
 from src.jira_scraper.report_generator import ReportGenerator
+from src.jira_scraper.cache import DataCache
 
 
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Jira Scraper & Analytics - Generate comprehensive reports from Jira data",
+        description="Jira Bug & Test Scraper - Generate bug and test execution reports",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --granularity weekly
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --output custom_report.html
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --output bug_report.html
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1 --test-label Release-2.0
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --force-fetch
         """
     )
 
@@ -36,22 +35,14 @@ Examples:
         "--start-date",
         "-s",
         required=True,
-        help="Start date in YYYY-MM-DD format",
+        help="Report start date in YYYY-MM-DD format (for filtering in report, not for data fetching)",
     )
 
     parser.add_argument(
         "--end-date",
         "-e",
         required=True,
-        help="End date in YYYY-MM-DD format",
-    )
-
-    parser.add_argument(
-        "--granularity",
-        "-g",
-        choices=["daily", "weekly"],
-        default="daily",
-        help="Temporal trend granularity (default: daily)",
+        help="Report end date in YYYY-MM-DD format (for filtering in report, not for data fetching)",
     )
 
     parser.add_argument(
@@ -70,7 +61,7 @@ Examples:
     parser.add_argument(
         "--label",
         "-l",
-        help="Filter all tickets by label in JQL queries (e.g., 'Sprint-1', 'Release-2.0')",
+        help="Filter bugs by label (e.g., 'Sprint-1', 'Release-2.0')",
     )
 
     parser.add_argument(
@@ -85,6 +76,19 @@ Examples:
         type=int,
         default=1000,
         help="Number of tickets to fetch per request (default: 1000)",
+    )
+
+    parser.add_argument(
+        "--force-fetch",
+        "-f",
+        action="store_true",
+        help="Force fetch from Jira even if cached data exists",
+    )
+
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="Clear cached data for this project and exit",
     )
 
     return parser.parse_args()
@@ -110,6 +114,15 @@ def validate_date(date_string: str) -> bool:
 def main():
     """Main execution function."""
     args = parse_arguments()
+
+    # Initialize cache
+    cache = DataCache()
+
+    # Handle cache clearing
+    if args.clear_cache:
+        print(f"Clearing cache for project {args.project}...")
+        cache.clear_cache(args.project)
+        sys.exit(0)
 
     # Validate dates
     if not validate_date(args.start_date):
@@ -150,41 +163,56 @@ def main():
         print(f"Project: {project_info['name']}")
         print(f"Lead: {project_info.get('lead', 'N/A')}")
 
-        # Fetch tickets
-        if args.label:
-            print(f"\nFetching tickets from {args.start_date} to {args.end_date} with label '{args.label}'...")
-        else:
-            print(f"\nFetching tickets from {args.start_date} to {args.end_date}...")
+        # Fetch or load bugs
+        bugs = None
+        if not args.force_fetch and cache.exists(args.project, "bugs", args.label):
+            print(f"\n[1/2] Loading bugs from cache...")
+            bugs = cache.load(args.project, "bugs", args.label)
 
-        tickets = scraper.get_project_tickets(
-            project_key=args.project,
-            start_date=args.start_date,
-            end_date=args.end_date,
-            label=args.label,
-            batch_size=args.batch_size,
-        )
+        if bugs is None or args.force_fetch:
+            if args.label:
+                print(f"\n[1/2] Fetching ALL bugs from Jira with label '{args.label}'...")
+            else:
+                print(f"\n[1/2] Fetching ALL bugs from Jira...")
 
-        if not tickets:
-            print("No tickets found for the specified criteria.")
-            sys.exit(0)
+            bugs = scraper.get_bugs(
+                project_key=args.project,
+                label=args.label,
+                batch_size=args.batch_size,
+            )
 
-        # Analyze data
-        print(f"\nAnalyzing {len(tickets)} tickets...")
-        analyzer = JiraAnalyzer(tickets, jira_url=scraper.jira_url)
-        analyzer.build_dataframes()
+            # Save to cache
+            cache.save(args.project, "bugs", bugs, args.label)
 
-        print("Calculating metrics...")
-        summary_stats = analyzer.get_summary_statistics()
-        flow_metrics = analyzer.calculate_flow_metrics()
-        cycle_metrics = analyzer.calculate_cycle_metrics()
-        temporal_trends = analyzer.calculate_temporal_trends(
-            start_date=args.start_date,
-            end_date=args.end_date,
-            granularity=args.granularity,
-        )
+        print(f"Total bugs available: {len(bugs)}")
+
+        # Fetch or load test executions
+        test_label = args.test_label if args.test_label else args.label
+        test_executions = None
+
+        if not args.force_fetch and cache.exists(args.project, "test_executions", test_label):
+            print(f"\n[2/2] Loading test executions from cache...")
+            test_executions = cache.load(args.project, "test_executions", test_label)
+
+        if test_executions is None or args.force_fetch:
+            if test_label:
+                print(f"\n[2/2] Fetching ALL test executions from Jira with label '{test_label}'...")
+            else:
+                print(f"\n[2/2] Fetching ALL test executions from Jira...")
+
+            test_executions = scraper.get_test_executions(
+                project_key=args.project,
+                target_label=test_label,
+                batch_size=args.batch_size,
+            )
+
+            # Save to cache
+            cache.save(args.project, "test_executions", test_executions, test_label)
+
+        print(f"Total test executions available: {len(test_executions)}")
 
         # Generate report
-        print(f"\nGenerating HTML report...")
+        print(f"\nGenerating HTML report for date range {args.start_date} to {args.end_date}...")
         report_gen = ReportGenerator(
             project_name=args.project,
             start_date=args.start_date,
@@ -192,15 +220,9 @@ def main():
             jira_url=scraper.jira_url,
         )
 
-        # Default test_label to label if not specified
-        test_label = args.test_label if args.test_label else args.label
-
         output_path = report_gen.generate_html_report(
-            summary_stats=summary_stats,
-            flow_metrics=flow_metrics,
-            cycle_metrics=cycle_metrics,
-            temporal_trends=temporal_trends,
-            tickets=tickets,
+            bugs=bugs,
+            test_executions=test_executions,
             test_label=test_label,
             output_file=args.output,
         )
@@ -209,10 +231,9 @@ def main():
         print("\n" + "=" * 60)
         print("ANALYSIS COMPLETE")
         print("=" * 60)
-        print(f"Total tickets analyzed: {summary_stats['total_tickets']}")
-        print(f"Resolved tickets: {summary_stats['resolved_tickets']}")
-        print(f"Average lead time: {cycle_metrics['avg_lead_time']:.2f} days")
-        print(f"Average cycle time: {cycle_metrics['avg_cycle_time']:.2f} days")
+        print(f"Total bugs: {len(bugs)}")
+        print(f"Total test executions: {len(test_executions)}")
+        print(f"Date range filtered in report: {args.start_date} to {args.end_date}")
         print(f"\nReport saved to: {output_path}")
         print("=" * 60)
 

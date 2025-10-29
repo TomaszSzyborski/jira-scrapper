@@ -26,23 +26,15 @@ class JQLQueries:
     
     ISSUES_OPEN_ON_DATE = 'project = "{project}" AND created <= "{date}" AND (resolved is EMPTY OR resolved > "{date}")'
     
-    # Bug-specific queries
-    BUGS_CREATED = 'project = "{project}" AND type = Bug AND created >= "{start_date}" AND created <= "{end_date}"'
+    # Bug-specific queries (no date filter - fetch ALL bugs)
+    BUGS_ALL = 'project = "{project}" AND type in (Bug, "Błąd w programie") ORDER BY created DESC'
 
-    BUGS_CREATED_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}"'
+    BUGS_ALL_WITH_LABEL = 'project = "{project}" AND type in (Bug, "Błąd w programie") AND labels = "{label}" ORDER BY created DESC'
 
-    BUGS_RESOLVED = 'project = "{project}" AND type = Bug AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
+    # Test-related queries (no date filter - fetch ALL test executions)
+    TEST_EXECUTIONS = 'project = "{project}" AND type = "Test Execution" ORDER BY created DESC'
 
-    BUGS_RESOLVED_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
-
-    BUGS_OPEN = 'project = "{project}" AND type = Bug AND resolution = Unresolved'
-
-    BUGS_OPEN_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND resolution = Unresolved'
-    
-    # Test-related queries
-    TEST_EXECUTIONS = 'project = "{project}" AND type = "Test Execution" AND created >= "{start_date}" AND created <= "{end_date}"'
-    
-    TEST_EXECUTIONS_WITH_LABEL = 'project = "{project}" AND type = "Test Execution" AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}"'
+    TEST_EXECUTIONS_WITH_LABEL = 'project = "{project}" AND type = "Test Execution" AND labels = "{label}" ORDER BY created DESC'
     
     # Test cases (not test executions)
     TEST_CASES = 'project = "{project}" AND type = Test'
