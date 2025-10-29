@@ -16,6 +16,7 @@ from .status_category_chart import StatusCategoryChart
 from .models import ReportConfig, Ticket, StatusTransition, FlowMetrics, CycleMetrics
 from .jql_queries import JQLQueries
 from .translations import Translations
+from .status_definitions import StatusDefinitions
 
 __all__ = [
     "JiraScraper",
@@ -29,6 +30,7 @@ __all__ = [
     "StatusCategoryChart",
     "JQLQueries",
     "Translations",
+    "StatusDefinitions",
     "ReportConfig",
     "Ticket",
     "StatusTransition",

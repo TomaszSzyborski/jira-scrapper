@@ -5,17 +5,11 @@ from typing import List, Dict, Any, Optional
 import polars as pl
 import plotly.graph_objects as go
 import numpy as np
+from .status_definitions import StatusDefinitions
 
 
 class StatusCategoryChart:
     """Generates bar charts for status category distribution day by day."""
-
-    # Status category mappings
-    STATUS_CATEGORY_MAP = {
-        "To Do": ["To Do", "Open", "New", "Backlog", "Reopened", "TODO"],
-        "In Progress": ["In Progress", "In Development", "In Review", "Testing", "QA", "Code Review", "Developing"],
-        "Done": ["Done", "Closed", "Resolved", "Complete", "Completed", "Finished", "Cancelled", "Canceled", "Rejected"],
-    }
 
     def __init__(self, tickets: List[Dict[str, Any]], jira_url: str = ""):
         """
@@ -41,29 +35,8 @@ class StatusCategoryChart:
         Returns:
             Category name
         """
-        # Use Jira's statusCategory if available
-        if status_category:
-            cat_lower = status_category.lower()
-            if cat_lower in ["todo", "to do", "new"]:
-                return "To Do"
-            elif cat_lower in ["indeterminate", "in progress", "inprogress"]:
-                return "In Progress"
-            elif cat_lower in ["done", "complete"]:
-                return "Done"
-
-        # Fallback to status name mapping
-        for category, statuses in self.STATUS_CATEGORY_MAP.items():
-            if status in statuses:
-                return category
-
-        # Heuristic detection
-        status_lower = status.lower()
-        if any(kw in status_lower for kw in ["done", "closed", "resolved", "complete", "finish", "cancel", "reject"]):
-            return "Done"
-        elif any(kw in status_lower for kw in ["progress", "development", "review", "testing", "qa", "developing"]):
-            return "In Progress"
-        else:
-            return "To Do"
+        # Use centralized StatusDefinitions
+        return StatusDefinitions.categorize_status(status, status_category or "")
 
     def _get_status_category_on_date(self, ticket: Dict[str, Any], target_date: datetime) -> Optional[str]:
         """
