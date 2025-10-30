@@ -2,6 +2,9 @@
 
 import os
 import time
+import json
+import hashlib
+from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from dotenv import load_dotenv
@@ -24,6 +27,7 @@ class JiraScraper:
         max_retries: int = 3,
         backoff_factor: int = 2,
         requests_per_minute: int = 60,
+        cache_dir: str = ".jira_cache",
     ):
         """
         Initialize Jira scraper with support for Cloud (API token) and On-Premise (username/password).
@@ -39,6 +43,7 @@ class JiraScraper:
             max_retries: Maximum number of retry attempts for failed requests
             backoff_factor: Multiplier for exponential backoff
             requests_per_minute: Rate limit for API requests
+            cache_dir: Directory to store cached data (default: .jira_cache)
         """
         load_dotenv()
 
@@ -96,6 +101,10 @@ class JiraScraper:
 
         self._last_request_time = 0.0
         self._jira_client: Optional[JIRA] = None
+
+        # Cache configuration
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(exist_ok=True)
 
     @property
     def client(self) -> JIRA:
@@ -156,6 +165,97 @@ class JiraScraper:
                 else:
                     raise
 
+    def _generate_cache_key(
+        self,
+        project_key: str,
+        query_type: str,
+        label: Optional[str] = None,
+    ) -> str:
+        """
+        Generate a unique cache key based on query parameters.
+
+        Note: Date filtering is now done during analysis, not during fetch,
+        so cache keys don't include dates.
+
+        Args:
+            project_key: Jira project key
+            query_type: Type of query (e.g., 'tickets', 'bugs', 'test_executions')
+            label: Optional label filter
+
+        Returns:
+            MD5 hash string to use as cache filename
+        """
+        params = {
+            "project": project_key,
+            "type": query_type,
+            "label": label,
+        }
+        params_str = json.dumps(params, sort_keys=True)
+        hash_obj = hashlib.md5(params_str.encode())
+        return hash_obj.hexdigest()
+
+    def _get_cache_path(self, cache_key: str) -> Path:
+        """Get the full path for a cache file."""
+        return self.cache_dir / f"{cache_key}.json"
+
+    def _save_to_cache(
+        self,
+        cache_key: str,
+        data: List[Dict[str, Any]],
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Save data to cache file.
+
+        Args:
+            cache_key: Cache key generated from query parameters
+            data: Data to cache
+            metadata: Optional metadata to store with the cache
+        """
+        cache_path = self._get_cache_path(cache_key)
+        cache_data = {
+            "cached_at": datetime.now().isoformat(),
+            "metadata": metadata or {},
+            "data": data,
+        }
+
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(cache_data, f, indent=2, ensure_ascii=False)
+            print(f"Data cached to: {cache_path}")
+        except Exception as e:
+            print(f"Warning: Failed to save cache: {e}")
+
+    def _load_from_cache(self, cache_key: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Load data from cache file if it exists.
+
+        Args:
+            cache_key: Cache key generated from query parameters
+
+        Returns:
+            Cached data if available, None otherwise
+        """
+        cache_path = self._get_cache_path(cache_key)
+
+        if not cache_path.exists():
+            return None
+
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cache_data = json.load(f)
+
+            cached_at = datetime.fromisoformat(cache_data["cached_at"])
+            data_count = len(cache_data["data"])
+
+            print(f"Found cached data from {cached_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Cached records: {data_count}")
+
+            return cache_data["data"]
+        except Exception as e:
+            print(f"Warning: Failed to load cache: {e}")
+            return None
+
     def get_project_tickets(
         self,
         project_key: str,
@@ -163,6 +263,7 @@ class JiraScraper:
         end_date: Optional[str] = None,
         label: Optional[str] = None,
         batch_size: int = 1000,
+        force_fetch: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Fetch all tickets for a project within a date range using JQL from jql_queries.py.
@@ -173,33 +274,33 @@ class JiraScraper:
             end_date: End date in YYYY-MM-DD format
             label: Optional label to filter tickets
             batch_size: Number of tickets to fetch per request
+            force_fetch: If True, ignore cache and fetch from API
 
         Returns:
             List of ticket dictionaries with full details and changelog
         """
-        # Use JQL query template from jql_queries.py
-        if start_date and end_date:
-            if label:
-                jql = JQLQueries.format_query(
-                    JQLQueries.PROJECT_TICKETS_WITH_LABEL,
-                    project=project_key,
-                    label=label,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-            else:
-                jql = JQLQueries.format_query(
-                    JQLQueries.PROJECT_TICKETS,
-                    project=project_key,
-                    start_date=start_date,
-                    end_date=end_date
-                )
+        # Check cache first unless force_fetch is enabled
+        cache_key = self._generate_cache_key(project_key, "tickets", label)
+
+        if not force_fetch:
+            cached_data = self._load_from_cache(cache_key)
+            if cached_data is not None:
+                print("Using cached data. Use --force-fetch to refresh from API.")
+                return cached_data
+
+        print("Fetching data from Jira API...")
+        # Use JQL query template from jql_queries.py - fetch ALL tickets
+        if label:
+            jql = JQLQueries.format_query(
+                JQLQueries.PROJECT_TICKETS_WITH_LABEL,
+                project=project_key,
+                label=label
+            )
         else:
-            # Fallback for no date filtering
-            if label:
-                jql = f'project = "{project_key}" AND labels = "{label}" ORDER BY created ASC'
-            else:
-                jql = f'project = "{project_key}" ORDER BY created ASC'
+            jql = JQLQueries.format_query(
+                JQLQueries.PROJECT_TICKETS,
+                project=project_key
+            )
 
         print(f"Using JQL query: {jql}")
 
@@ -236,6 +337,17 @@ class JiraScraper:
                 raise
 
         print(f"Total tickets fetched: {len(tickets)}")
+
+        # Save to cache
+        metadata = {
+            "project_key": project_key,
+            "start_date": start_date,
+            "end_date": end_date,
+            "label": label,
+            "total_count": len(tickets),
+        }
+        self._save_to_cache(cache_key, tickets, metadata)
+
         return tickets
 
     def _extract_ticket_data(self, issue) -> Dict[str, Any]:
@@ -401,6 +513,7 @@ class JiraScraper:
         end_date: str,
         label: Optional[str] = None,
         batch_size: int = 1000,
+        force_fetch: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Fetch all bugs for a project within a date range using JQL from jql_queries.py.
@@ -411,24 +524,32 @@ class JiraScraper:
             end_date: End date in YYYY-MM-DD format
             label: Optional label to filter bugs
             batch_size: Number of tickets to fetch per request
+            force_fetch: If True, ignore cache and fetch from API
 
         Returns:
             List of bug ticket dictionaries
         """
+        # Check cache first unless force_fetch is enabled
+        cache_key = self._generate_cache_key(project_key, "bugs", label)
+
+        if not force_fetch:
+            cached_data = self._load_from_cache(cache_key)
+            if cached_data is not None:
+                print("Using cached bugs data. Use --force-fetch to refresh from API.")
+                return cached_data
+
+        print("Fetching bugs from Jira API...")
+        # Fetch ALL bugs by type (Bug or "Błąd w programie")
         if label:
             jql = JQLQueries.format_query(
-                JQLQueries.BUGS_CREATED_WITH_LABEL,
+                JQLQueries.BUGS_ALL_WITH_LABEL,
                 project=project_key,
-                label=label,
-                start_date=start_date,
-                end_date=end_date
+                label=label
             )
         else:
             jql = JQLQueries.format_query(
-                JQLQueries.BUGS_CREATED,
-                project=project_key,
-                start_date=start_date,
-                end_date=end_date
+                JQLQueries.BUGS_ALL,
+                project=project_key
             )
 
         print(f"Fetching bugs with JQL: {jql}")
@@ -466,6 +587,17 @@ class JiraScraper:
                 raise
 
         print(f"Total bugs fetched: {len(bugs)}")
+
+        # Save to cache
+        metadata = {
+            "project_key": project_key,
+            "start_date": start_date,
+            "end_date": end_date,
+            "label": label,
+            "total_count": len(bugs),
+        }
+        self._save_to_cache(cache_key, bugs, metadata)
+
         return bugs
 
     def get_test_executions(
@@ -475,6 +607,7 @@ class JiraScraper:
         end_date: str,
         label: Optional[str] = None,
         batch_size: int = 1000,
+        force_fetch: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Fetch all test executions for a project within a date range using JQL from jql_queries.py.
@@ -485,24 +618,32 @@ class JiraScraper:
             end_date: End date in YYYY-MM-DD format
             label: Optional label to filter test executions
             batch_size: Number of tickets to fetch per request
+            force_fetch: If True, ignore cache and fetch from API
 
         Returns:
             List of test execution ticket dictionaries
         """
+        # Check cache first unless force_fetch is enabled
+        cache_key = self._generate_cache_key(project_key, "test_executions", label)
+
+        if not force_fetch:
+            cached_data = self._load_from_cache(cache_key)
+            if cached_data is not None:
+                print("Using cached test executions data. Use --force-fetch to refresh from API.")
+                return cached_data
+
+        print("Fetching test executions from Jira API...")
+        # Fetch ALL test executions
         if label:
             jql = JQLQueries.format_query(
                 JQLQueries.TEST_EXECUTIONS_WITH_LABEL,
                 project=project_key,
-                label=label,
-                start_date=start_date,
-                end_date=end_date
+                label=label
             )
         else:
             jql = JQLQueries.format_query(
                 JQLQueries.TEST_EXECUTIONS,
-                project=project_key,
-                start_date=start_date,
-                end_date=end_date
+                project=project_key
             )
 
         print(f"Fetching test executions with JQL: {jql}")
@@ -540,6 +681,17 @@ class JiraScraper:
                 raise
 
         print(f"Total test executions fetched: {len(test_executions)}")
+
+        # Save to cache
+        metadata = {
+            "project_key": project_key,
+            "start_date": start_date,
+            "end_date": end_date,
+            "label": label,
+            "total_count": len(test_executions),
+        }
+        self._save_to_cache(cache_key, test_executions, metadata)
+
         return test_executions
 
     def test_connection(self) -> bool:

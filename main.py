@@ -22,6 +22,14 @@ Examples:
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --output custom_report.html
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1 --test-label Release-2.0
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --force-fetch
+
+Note:
+  - All tickets are fetched from Jira regardless of date (for efficient caching)
+  - Date filtering is applied during analysis phase
+  - Bugs are filtered by issue type (Bug or "Błąd w programie"), not by date
+  - Data is cached by default in .jira_cache/ directory
+  - Use --force-fetch to refresh cache from API
         """
     )
 
@@ -36,14 +44,14 @@ Examples:
         "--start-date",
         "-s",
         required=True,
-        help="Start date in YYYY-MM-DD format",
+        help="Start date for analysis in YYYY-MM-DD format (fetches all tickets, filters during analysis)",
     )
 
     parser.add_argument(
         "--end-date",
         "-e",
         required=True,
-        help="End date in YYYY-MM-DD format",
+        help="End date for analysis in YYYY-MM-DD format (fetches all tickets, filters during analysis)",
     )
 
     parser.add_argument(
@@ -85,6 +93,13 @@ Examples:
         type=int,
         default=1000,
         help="Number of tickets to fetch per request (default: 1000)",
+    )
+
+    parser.add_argument(
+        "--force-fetch",
+        "-f",
+        action="store_true",
+        help="Force fetching data from API, ignoring cache",
     )
 
     return parser.parse_args()
@@ -150,18 +165,24 @@ def main():
         print(f"Project: {project_info['name']}")
         print(f"Lead: {project_info.get('lead', 'N/A')}")
 
-        # Fetch tickets
+        # Fetch tickets (all tickets, date filtering happens during analysis)
+        if args.force_fetch:
+            print("\nForce fetch enabled - ignoring cache and fetching from API...")
+
         if args.label:
-            print(f"\nFetching tickets from {args.start_date} to {args.end_date} with label '{args.label}'...")
+            print(f"\nFetching all tickets with label '{args.label}'...")
         else:
-            print(f"\nFetching tickets from {args.start_date} to {args.end_date}...")
+            print(f"\nFetching all tickets for project {args.project}...")
+
+        print(f"(Date filtering {args.start_date} to {args.end_date} will be applied during analysis)")
 
         tickets = scraper.get_project_tickets(
             project_key=args.project,
-            start_date=args.start_date,
-            end_date=args.end_date,
+            start_date=args.start_date,  # Kept for backwards compatibility, not used in query
+            end_date=args.end_date,      # Kept for backwards compatibility, not used in query
             label=args.label,
             batch_size=args.batch_size,
+            force_fetch=args.force_fetch,
         )
 
         if not tickets:

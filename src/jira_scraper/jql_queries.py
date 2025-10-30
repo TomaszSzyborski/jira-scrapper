@@ -10,10 +10,10 @@ from typing import Dict, Any
 class JQLQueries:
     """Container for all JQL query templates."""
 
-    # Project-based queries
-    PROJECT_TICKETS = 'project = "{project}" AND created >= "{start_date}" AND created <= "{end_date}" ORDER BY created ASC'
+    # Project-based queries - fetch ALL tickets regardless of date
+    PROJECT_TICKETS = 'project = "{project}" ORDER BY created ASC'
 
-    PROJECT_TICKETS_WITH_LABEL = 'project = "{project}" AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}" ORDER BY created ASC'
+    PROJECT_TICKETS_WITH_LABEL = 'project = "{project}" AND labels = "{label}" ORDER BY created ASC'
 
     PROJECT_TICKETS_UPDATED = 'project = "{project}" AND updated >= "{start_date}" AND updated <= "{end_date}" ORDER BY updated ASC'
 
@@ -26,23 +26,23 @@ class JQLQueries:
     
     ISSUES_OPEN_ON_DATE = 'project = "{project}" AND created <= "{date}" AND (resolved is EMPTY OR resolved > "{date}")'
     
-    # Bug-specific queries
-    BUGS_CREATED = 'project = "{project}" AND type = Bug AND created >= "{start_date}" AND created <= "{end_date}"'
+    # Bug-specific queries - filter by type only (Bug or "Błąd w programie")
+    BUGS_ALL = 'project = "{project}" AND (type = Bug OR type = "Błąd w programie") ORDER BY created ASC'
 
-    BUGS_CREATED_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}"'
+    BUGS_ALL_WITH_LABEL = 'project = "{project}" AND (type = Bug OR type = "Błąd w programie") AND labels = "{label}" ORDER BY created ASC'
 
-    BUGS_RESOLVED = 'project = "{project}" AND type = Bug AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
+    BUGS_RESOLVED = 'project = "{project}" AND (type = Bug OR type = "Błąd w programie") AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
 
-    BUGS_RESOLVED_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
+    BUGS_RESOLVED_WITH_LABEL = 'project = "{project}" AND (type = Bug OR type = "Błąd w programie") AND labels = "{label}" AND resolved >= "{start_date}" AND resolved <= "{end_date}"'
 
-    BUGS_OPEN = 'project = "{project}" AND type = Bug AND resolution = Unresolved'
+    BUGS_OPEN = 'project = "{project}" AND (type = Bug OR type = "Błąd w programie") AND resolution = Unresolved'
 
-    BUGS_OPEN_WITH_LABEL = 'project = "{project}" AND type = Bug AND labels = "{label}" AND resolution = Unresolved'
+    BUGS_OPEN_WITH_LABEL = 'project = "{project}" AND (type = Bug OR type = "Błąd w programie") AND labels = "{label}" AND resolution = Unresolved'
     
-    # Test-related queries
-    TEST_EXECUTIONS = 'project = "{project}" AND type = "Test Execution" AND created >= "{start_date}" AND created <= "{end_date}"'
-    
-    TEST_EXECUTIONS_WITH_LABEL = 'project = "{project}" AND type = "Test Execution" AND labels = "{label}" AND created >= "{start_date}" AND created <= "{end_date}"'
+    # Test-related queries - fetch ALL test executions
+    TEST_EXECUTIONS = 'project = "{project}" AND type = "Test Execution" ORDER BY created ASC'
+
+    TEST_EXECUTIONS_WITH_LABEL = 'project = "{project}" AND type = "Test Execution" AND labels = "{label}" ORDER BY created ASC'
     
     # Test cases (not test executions)
     TEST_CASES = 'project = "{project}" AND type = Test'
