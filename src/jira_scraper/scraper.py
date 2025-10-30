@@ -266,18 +266,21 @@ class JiraScraper:
         force_fetch: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        Fetch all tickets for a project within a date range using JQL from jql_queries.py.
+        Fetch all tickets for a project.
+
+        Note: Fetches ALL tickets regardless of date. Date filtering should be done
+        during analysis phase for better caching efficiency.
 
         Args:
             project_key: Jira project key (e.g., "PROJ")
-            start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format
+            start_date: [DEPRECATED] Not used - kept for backwards compatibility
+            end_date: [DEPRECATED] Not used - kept for backwards compatibility
             label: Optional label to filter tickets
             batch_size: Number of tickets to fetch per request
             force_fetch: If True, ignore cache and fetch from API
 
         Returns:
-            List of ticket dictionaries with full details and changelog
+            List of all ticket dictionaries with full details and changelog
         """
         # Check cache first unless force_fetch is enabled
         cache_key = self._generate_cache_key(project_key, "tickets", label)
@@ -509,25 +512,28 @@ class JiraScraper:
     def get_bugs(
         self,
         project_key: str,
-        start_date: str,
-        end_date: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         label: Optional[str] = None,
         batch_size: int = 1000,
         force_fetch: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        Fetch all bugs for a project within a date range using JQL from jql_queries.py.
+        Fetch all bugs for a project by issue type (Bug or "Błąd w programie").
+
+        Note: Fetches ALL bugs regardless of date. Date filtering should be done
+        during analysis phase.
 
         Args:
             project_key: Jira project key (e.g., "PROJ")
-            start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format
+            start_date: [DEPRECATED] Not used - kept for backwards compatibility
+            end_date: [DEPRECATED] Not used - kept for backwards compatibility
             label: Optional label to filter bugs
             batch_size: Number of tickets to fetch per request
             force_fetch: If True, ignore cache and fetch from API
 
         Returns:
-            List of bug ticket dictionaries
+            List of all bug ticket dictionaries (type = Bug or "Błąd w programie")
         """
         # Check cache first unless force_fetch is enabled
         cache_key = self._generate_cache_key(project_key, "bugs", label)
@@ -603,25 +609,28 @@ class JiraScraper:
     def get_test_executions(
         self,
         project_key: str,
-        start_date: str,
-        end_date: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         label: Optional[str] = None,
         batch_size: int = 1000,
         force_fetch: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        Fetch all test executions for a project within a date range using JQL from jql_queries.py.
+        Fetch all test executions for a project.
+
+        Note: Fetches ALL test executions regardless of date. Date filtering should
+        be done during analysis phase.
 
         Args:
             project_key: Jira project key (e.g., "PROJ")
-            start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format
+            start_date: [DEPRECATED] Not used - kept for backwards compatibility
+            end_date: [DEPRECATED] Not used - kept for backwards compatibility
             label: Optional label to filter test executions
             batch_size: Number of tickets to fetch per request
             force_fetch: If True, ignore cache and fetch from API
 
         Returns:
-            List of test execution ticket dictionaries
+            List of all test execution ticket dictionaries
         """
         # Check cache first unless force_fetch is enabled
         cache_key = self._generate_cache_key(project_key, "test_executions", label)

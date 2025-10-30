@@ -131,7 +131,7 @@ class JQLQueries:
 # Commonly used query combinations
 COMMON_QUERIES = {
     "all_project_tickets": JQLQueries.PROJECT_TICKETS,
-    "bugs_in_period": JQLQueries.BUGS_CREATED,
+    "bugs_all": JQLQueries.BUGS_ALL,
     "test_executions": JQLQueries.TEST_EXECUTIONS,
     "open_issues": JQLQueries.ISSUES_OPEN_ON_DATE,
 }

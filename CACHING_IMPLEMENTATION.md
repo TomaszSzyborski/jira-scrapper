@@ -111,25 +111,28 @@ python main.py --project PROJ --start-date 2024-01-01 --end-date 2024-12-31 --fo
    - Creates cache directory if it doesn't exist
 
 2. **New methods:**
-   - `_generate_cache_key()` - Generate unique cache key from parameters
+   - `_generate_cache_key()` - Generate unique cache key from parameters (project, type, label)
    - `_get_cache_path()` - Get full path for cache file
-   - `_save_to_cache()` - Save data to JSON cache file
-   - `_load_from_cache()` - Load data from cache file
+   - `_save_to_cache()` - Save data to JSON cache file with metadata
+   - `_load_from_cache()` - Load data from cache file if it exists
 
 3. **Updated methods:**
-   - `get_project_tickets()` - Added `force_fetch` parameter, checks cache before API call
-   - `get_bugs()` - Added `force_fetch` parameter, uses type-based filtering
-   - `get_test_executions()` - Added `force_fetch` parameter, fetches all executions
+   - `get_project_tickets()` - Added `force_fetch` parameter, checks cache before API call. **start_date/end_date are now deprecated** (kept for backwards compatibility)
+   - `get_bugs()` - Added `force_fetch` parameter, uses type-based filtering (Bug or "Błąd w programie"). **start_date/end_date are now deprecated**
+   - `get_test_executions()` - Added `force_fetch` parameter, fetches all executions. **start_date/end_date are now deprecated**
 
 ### Query Changes (`src/jira_scraper/jql_queries.py`)
 
 1. **Updated query templates:**
    - `PROJECT_TICKETS` - Removed date filtering
    - `PROJECT_TICKETS_WITH_LABEL` - Removed date filtering
-   - `BUGS_ALL` - New query using type filter with Polish support
+   - `BUGS_ALL` - New query using type filter with Polish support (Bug OR "Błąd w programie")
    - `BUGS_ALL_WITH_LABEL` - New query with label support
    - `TEST_EXECUTIONS` - Removed date filtering
    - `TEST_EXECUTIONS_WITH_LABEL` - Removed date filtering
+
+2. **Updated COMMON_QUERIES dictionary:**
+   - Changed `"bugs_in_period": JQLQueries.BUGS_CREATED` to `"bugs_all": JQLQueries.BUGS_ALL`
 
 ### Main Script Changes (`main.py`)
 
@@ -161,9 +164,24 @@ python main.py --project PROJ --start-date 2024-01-01 --end-date 2024-12-31 --fo
    - `--force-fetch` flag for manual cache refresh
    - Clear messages about cache usage
 
-## Notes
+## Important Notes
 
+### Method Signatures
+- The `start_date` and `end_date` parameters in `get_project_tickets()`, `get_bugs()`, and `get_test_executions()` are **deprecated** but kept for backwards compatibility
+- These parameters are now `Optional[str] = None` instead of required
+- They are not used in JQL queries or cache key generation
+- Date filtering should be done during the analysis phase
+
+### Report Generation
+- `report_generator.py` does **NOT** call `get_bugs()` or `get_test_executions()` directly
+- It receives all tickets from `get_project_tickets()` and filters them internally:
+  - Bugs: Filtered by `issue_type` in ["bug", "defect"] or == "Błąd w programie"
+  - Test Executions: Filtered by `issue_type` in ["Test Execution", "Test"]
+- Charts do their own filtering based on the full ticket list
+
+### Cache Management
 - Cache files are stored in `.jira_cache/` which is git-ignored
 - Each cache file includes timestamp and metadata for transparency
 - Failed cache operations (read/write) show warnings but don't stop execution
 - Cache invalidation is manual (use `--force-fetch` or delete cache directory)
+- Cache keys are based on: project_key + query_type + label (NOT dates)
