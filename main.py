@@ -11,6 +11,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from jira import JIRA
+import polars as pl
 
 
 class JiraFetcher:
@@ -184,10 +185,338 @@ class JiraFetcher:
         }
 
 
+class FlowAnalyzer:
+    """Analyze ticket status flows using Polars."""
+
+    def __init__(self, issues: list):
+        """
+        Initialize flow analyzer with issues.
+
+        Args:
+            issues: List of issue dictionaries
+        """
+        self.issues = issues
+
+    def build_transitions_dataframe(self) -> pl.DataFrame:
+        """
+        Build a Polars DataFrame of all status transitions.
+
+        Returns:
+            DataFrame with columns: issue_key, from_status, to_status, transition_date, author
+        """
+        transitions = []
+
+        for issue in self.issues:
+            issue_key = issue['key']
+            current_status = issue['status']
+            changelog = issue.get('changelog', [])
+
+            # If there's no changelog, the issue was created and stayed in current status
+            if not changelog:
+                # Initial creation (no from_status)
+                transitions.append({
+                    'issue_key': issue_key,
+                    'from_status': None,
+                    'to_status': current_status,
+                    'transition_date': issue['created'],
+                    'author': issue['reporter'],
+                })
+            else:
+                # Process all status transitions
+                for change in changelog:
+                    transitions.append({
+                        'issue_key': issue_key,
+                        'from_status': change['from_string'],
+                        'to_status': change['to_string'],
+                        'transition_date': change['created'],
+                        'author': change['author'],
+                    })
+
+        df = pl.DataFrame(transitions)
+        return df
+
+    def calculate_flow_metrics(self) -> dict:
+        """
+        Calculate flow metrics from transitions.
+
+        Returns:
+            Dictionary with flow statistics
+        """
+        df = self.build_transitions_dataframe()
+
+        if df.is_empty():
+            return {
+                'total_transitions': 0,
+                'unique_statuses': 0,
+                'flow_patterns': [],
+            }
+
+        # Count transitions between statuses
+        flow_counts = (
+            df.filter(pl.col('from_status').is_not_null())
+            .group_by(['from_status', 'to_status'])
+            .agg(pl.len().alias('count'))
+            .sort('count', descending=True)
+        )
+
+        # Get unique statuses
+        all_statuses = set()
+        for status in df['from_status'].drop_nulls():
+            all_statuses.add(status)
+        for status in df['to_status']:
+            all_statuses.add(status)
+
+        # Convert to list of flow patterns
+        flow_patterns = []
+        for row in flow_counts.iter_rows(named=True):
+            flow_patterns.append({
+                'from': row['from_status'],
+                'to': row['to_status'],
+                'count': row['count'],
+            })
+
+        return {
+            'total_transitions': len(df),
+            'unique_statuses': len(all_statuses),
+            'flow_patterns': flow_patterns,
+            'all_statuses': sorted(all_statuses),
+        }
+
+
+class ReportGenerator:
+    """Generate HTML reports with Plotly.js visualizations."""
+
+    def __init__(self, metadata: dict, flow_metrics: dict):
+        """
+        Initialize report generator.
+
+        Args:
+            metadata: Project metadata
+            flow_metrics: Flow metrics from FlowAnalyzer
+        """
+        self.metadata = metadata
+        self.flow_metrics = flow_metrics
+
+    def generate_html(self, output_file: str = 'jira_flow_report.html'):
+        """
+        Generate HTML report with Sankey diagram.
+
+        Args:
+            output_file: Output HTML file path
+
+        Returns:
+            Path to generated report
+        """
+        # Prepare data for Sankey diagram
+        flow_patterns = self.flow_metrics['flow_patterns']
+        all_statuses = self.flow_metrics['all_statuses']
+
+        # Build node and link data for Sankey
+        # Nodes are statuses, links are transitions
+        node_labels = all_statuses
+        node_dict = {status: idx for idx, status in enumerate(node_labels)}
+
+        sources = []
+        targets = []
+        values = []
+        link_labels = []
+
+        for pattern in flow_patterns:
+            from_status = pattern['from']
+            to_status = pattern['to']
+            count = pattern['count']
+
+            sources.append(node_dict[from_status])
+            targets.append(node_dict[to_status])
+            values.append(count)
+            link_labels.append(f"{from_status} → {to_status}: {count}")
+
+        # Generate HTML
+        html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Flow Report - {self.metadata['project']}</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+        }}
+        .header {{
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }}
+        h1 {{
+            color: #2d3748;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }}
+        .metadata {{
+            color: #718096;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }}
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }}
+        .stat-card {{
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }}
+        .stat-label {{
+            color: #718096;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }}
+        .stat-value {{
+            color: #2d3748;
+            font-size: 2.5em;
+            font-weight: 700;
+        }}
+        .chart-container {{
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }}
+        .chart-title {{
+            color: #2d3748;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }}
+        .footer {{
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: #718096;
+            font-size: 0.9em;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Jira Flow Report</h1>
+            <div class="metadata">
+                <strong>Project:</strong> {self.metadata['project']}<br>
+                <strong>Fetched:</strong> {self.metadata.get('fetched_at', 'N/A')}<br>
+                <strong>Total Issues:</strong> {self.metadata.get('total_issues', 0)}
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Total Transitions</div>
+                <div class="stat-value">{self.flow_metrics['total_transitions']}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Unique Statuses</div>
+                <div class="stat-value">{self.flow_metrics['unique_statuses']}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Flow Patterns</div>
+                <div class="stat-value">{len(flow_patterns)}</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">Status Flow Diagram (Sankey)</div>
+            <div id="sankey-chart"></div>
+        </div>
+
+        <div class="footer">
+            Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Jira Flow Analyzer
+        </div>
+    </div>
+
+    <script>
+        // Sankey diagram data
+        const data = [{{
+            type: "sankey",
+            orientation: "h",
+            node: {{
+                pad: 15,
+                thickness: 30,
+                line: {{
+                    color: "black",
+                    width: 0.5
+                }},
+                label: {json.dumps(node_labels)},
+                color: {json.dumps(['#' + format(hash(s) % 0xFFFFFF, '06x') for s in node_labels])}
+            }},
+            link: {{
+                source: {json.dumps(sources)},
+                target: {json.dumps(targets)},
+                value: {json.dumps(values)},
+                label: {json.dumps(link_labels)}
+            }}
+        }}];
+
+        const layout = {{
+            font: {{
+                size: 12,
+                family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }},
+            height: 600,
+            margin: {{
+                l: 20,
+                r: 20,
+                t: 20,
+                b: 20
+            }}
+        }};
+
+        const config = {{
+            responsive: true,
+            displayModeBar: true,
+            displaylogo: false
+        }};
+
+        Plotly.newPlot('sankey-chart', data, layout, config);
+    </script>
+</body>
+</html>
+"""
+
+        # Write to file
+        output_path = Path(output_file)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
+        return str(output_path)
+
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='Fetch Jira issues and cache them to jira_cached.json',
+        description='Fetch Jira issues, analyze flows, and generate reports',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -202,6 +531,12 @@ Examples:
 
   # Fetch with all filters and force refresh
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-12-31 --label Sprint-1 --force-fetch
+
+  # Generate flow report from cached data
+  %(prog)s --project PROJ --report
+
+  # Fetch and generate report in one go
+  %(prog)s --project PROJ --force-fetch --report
         """
     )
 
@@ -243,6 +578,18 @@ Examples:
         '--output', '-o',
         default='jira_cached.json',
         help='Output file path (default: jira_cached.json)'
+    )
+
+    parser.add_argument(
+        '--report', '-r',
+        action='store_true',
+        help='Generate HTML flow report from cached data'
+    )
+
+    parser.add_argument(
+        '--report-output',
+        default='jira_flow_report.html',
+        help='HTML report output file (default: jira_flow_report.html)'
     )
 
     return parser.parse_args()
@@ -301,6 +648,26 @@ def main():
         if cached_data['metadata'].get('label'):
             print(f"  Label: {cached_data['metadata']['label']}")
 
+        # Generate report if requested
+        if args.report:
+            print("\n" + "=" * 60)
+            print("GENERATING FLOW REPORT")
+            print("=" * 60)
+
+            analyzer = FlowAnalyzer(cached_data['issues'])
+            flow_metrics = analyzer.calculate_flow_metrics()
+
+            print(f"\nFlow Analysis:")
+            print(f"  Total transitions: {flow_metrics['total_transitions']}")
+            print(f"  Unique statuses: {flow_metrics['unique_statuses']}")
+            print(f"  Flow patterns: {len(flow_metrics['flow_patterns'])}")
+
+            generator = ReportGenerator(cached_data['metadata'], flow_metrics)
+            report_path = generator.generate_html(args.report_output)
+
+            print(f"\nReport generated: {report_path}")
+            print("=" * 60)
+
         return
 
     # Fetch from API
@@ -343,6 +710,26 @@ def main():
         print(f"Total issues: {len(issues)}")
         print(f"Saved to: {output_path}")
         print("=" * 60)
+
+        # Generate report if requested
+        if args.report:
+            print("\n" + "=" * 60)
+            print("GENERATING FLOW REPORT")
+            print("=" * 60)
+
+            analyzer = FlowAnalyzer(issues)
+            flow_metrics = analyzer.calculate_flow_metrics()
+
+            print(f"\nFlow Analysis:")
+            print(f"  Total transitions: {flow_metrics['total_transitions']}")
+            print(f"  Unique statuses: {flow_metrics['unique_statuses']}")
+            print(f"  Flow patterns: {len(flow_metrics['flow_patterns'])}")
+
+            generator = ReportGenerator(output_data['metadata'], flow_metrics)
+            report_path = generator.generate_html(args.report_output)
+
+            print(f"\nReport generated: {report_path}")
+            print("=" * 60)
 
     except KeyboardInterrupt:
         print("\n\nOperation cancelled by user.")

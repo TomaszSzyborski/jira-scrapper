@@ -4,5 +4,8 @@
 # Jira API Client
 jira>=3.5.0
 
+# Data Analysis
+polars>=0.20.0
+
 # Utilities
 python-dotenv>=1.0.0
