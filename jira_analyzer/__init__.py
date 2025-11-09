@@ -23,6 +23,8 @@ from .models import (
     FlowPattern,
     DailyMetrics,
     ProjectMetrics,
+    is_correct_flow,
+    CORRECT_WORKFLOW,
 )
 
 __version__ = "2.0.0"
@@ -38,4 +40,6 @@ __all__ = [
     "FlowPattern",
     "DailyMetrics",
     "ProjectMetrics",
+    "is_correct_flow",
+    "CORRECT_WORKFLOW",
 ]

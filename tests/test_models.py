@@ -267,7 +267,9 @@ class TestJiraIssue:
         assert issue.get_status_category("New") == StatusCategory.NEW
         assert issue.get_status_category("In Progress") == StatusCategory.IN_PROGRESS
         assert issue.get_status_category("In Development") == StatusCategory.IN_PROGRESS
-        assert issue.get_status_category("Closed") == StatusCategory.CLOSED
+        assert issue.get_status_category("Closed") == StatusCategory.DONE
+        assert issue.get_status_category("Ready for UAT") == StatusCategory.DONE
+        assert issue.get_status_category("Resolved") == StatusCategory.DONE
         assert issue.get_status_category("Unknown") == StatusCategory.OTHER
         assert issue.get_status_category("") == StatusCategory.UNKNOWN
 

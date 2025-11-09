@@ -13,6 +13,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from .models import is_correct_flow
+
 
 class ReportGenerator:
     """
@@ -158,7 +160,7 @@ class ReportGenerator:
         link_labels = []
         link_colors = []
 
-        # Detect backward flows for coloring
+        # Color flows based on correctness: green for correct, red for loops/incorrect
         for pattern in flow_patterns:
             from_status = pattern['from']
             to_status = pattern['to']
@@ -176,8 +178,14 @@ class ReportGenerator:
                     is_loop = True
                     break
 
-            # Red for loops, gray for normal
-            link_colors.append('rgba(255,0,0,0.3)' if is_loop else 'rgba(0,0,0,0.2)')
+            # Check if this follows the correct workflow
+            is_valid_flow = is_correct_flow(from_status, to_status)
+
+            # Color coding: green for correct flows, red for loops and incorrect flows
+            if is_loop or not is_valid_flow:
+                link_colors.append('rgba(220, 38, 38, 0.4)')  # Red for loops/incorrect
+            else:
+                link_colors.append('rgba(34, 197, 94, 0.4)')  # Green for correct flows
 
         # Time in status table HTML
         time_table_rows = ""

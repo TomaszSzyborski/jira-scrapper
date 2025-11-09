@@ -20,12 +20,60 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator, computed_field
 
 
+# Correct workflow definition
+CORRECT_WORKFLOW = [
+    'new',
+    'analysis',
+    'to do',
+    'development',
+    'review',
+    'development done',
+    'to test',
+    'in test',
+    'ready for uat',
+    'resolved',
+    'closed'
+]
+
+
+def is_correct_flow(from_status: str, to_status: str) -> bool:
+    """
+    Check if a status transition follows the correct workflow.
+
+    Correct workflow: New -> Analysis -> To Do -> Development -> Review ->
+    Development Done -> To Test -> In Test -> Ready for UAT -> Resolved -> Closed
+
+    Args:
+        from_status: Source status
+        to_status: Destination status
+
+    Returns:
+        True if the transition follows the correct workflow (forward movement)
+    """
+    if not from_status or not to_status:
+        return False
+
+    from_lower = from_status.lower()
+    to_lower = to_status.lower()
+
+    # Check if both statuses are in the correct workflow
+    if from_lower not in CORRECT_WORKFLOW or to_lower not in CORRECT_WORKFLOW:
+        return False
+
+    # Get positions in workflow
+    from_idx = CORRECT_WORKFLOW.index(from_lower)
+    to_idx = CORRECT_WORKFLOW.index(to_lower)
+
+    # Valid transition is forward movement (including skipping steps)
+    return to_idx > from_idx
+
+
 class StatusCategory(str, Enum):
     """Standard status categories for workflow analysis."""
 
     NEW = "NEW"
     IN_PROGRESS = "IN PROGRESS"
-    CLOSED = "CLOSED"
+    DONE = "DONE"
     OTHER = "OTHER"
     UNKNOWN = "UNKNOWN"
 
@@ -223,6 +271,9 @@ class JiraIssue(BaseModel):
         """
         Categorize a status into workflow category.
 
+        Correct workflow: New -> Analysis -> To Do -> Development -> Review ->
+        Development Done -> To Test -> In Test -> Ready for UAT -> Resolved -> Closed
+
         Args:
             status: Status name to categorize
 
@@ -235,17 +286,18 @@ class JiraIssue(BaseModel):
         status_lower = status.lower()
 
         # NEW category
-        if status_lower in ['new', 'to do']:
+        if status_lower in ['new']:
             return StatusCategory.NEW
 
         # IN PROGRESS category
-        if status_lower in ['analysis', 'blocked', 'development', 'in development', 'in progress',
-                           'review', 'development done', 'to test', 'in test']:
+        if status_lower in ['analysis', 'to do', 'development', 'review',
+                           'development done', 'to test', 'in test',
+                           'blocked', 'in development', 'in progress']:
             return StatusCategory.IN_PROGRESS
 
-        # CLOSED category
-        if status_lower in ['rejected', 'closed', 'resolved', 'ready for uat']:
-            return StatusCategory.CLOSED
+        # DONE category (final states)
+        if status_lower in ['ready for uat', 'resolved', 'closed']:
+            return StatusCategory.DONE
 
         return StatusCategory.OTHER
 
