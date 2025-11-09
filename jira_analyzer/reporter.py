@@ -208,16 +208,6 @@ class ReportGenerator:
         </tr>
         """
 
-        # Loop details HTML
-        loop_rows = ""
-        for loop in loops.get('common_loops', [])[:10]:
-            loop_rows += f"""
-        <tr>
-            <td>{loop['pattern']}</td>
-            <td>{loop['count']}</td>
-        </tr>
-        """
-
         # Drilldown sections for open bugs
         drilldown_sections = ""
         for day in timeline_data:
@@ -438,14 +428,6 @@ class ReportGenerator:
                 <div class="stat-label">Unikalnych Statusów</div>
                 <div class="stat-value">{self.flow_metrics['unique_statuses']}</div>
             </div>
-            <div class="stat-card warning">
-                <div class="stat-label">Pętle Przeróbek</div>
-                <div class="stat-value loop-emphasis">{loops.get('total_loops', 0)}</div>
-            </div>
-            <div class="stat-card warning">
-                <div class="stat-label">Błędy z Pętlami</div>
-                <div class="stat-value loop-emphasis">{len(loops.get('issues_with_loops', []))}</div>
-            </div>
         </div>
 
         <div class="chart-container">
@@ -455,18 +437,18 @@ class ReportGenerator:
         </div>
 
         <div class="chart-container">
+            <div class="chart-title">🔄 Diagram Przepływu Statusów (Sankey)</div>
+            <div class="chart-subtitle">Przepływy: <span style="color: #22c55e;">zielone</span> = poprawny workflow, <span style="color: #dc2626;">czerwone</span> = niepoprawny przepływ, <span style="color: #808080;">szare</span> = pętle/powroty</div>
+            <div id="sankey-chart"></div>
+        </div>
+
+        <div class="chart-container">
             <div class="chart-title">📊 Otwarte Błędy w Czasie</div>
             <div class="chart-subtitle">Liczba błędów w statusie NEW lub IN PROGRESS każdego dnia z analizą trendu</div>
             <div id="open-chart"></div>
 
             <h3 style="margin-top: 30px; margin-bottom: 15px; color: #2d3748;">🔍 Szczegóły otwartych błędów dzień po dniu</h3>
             {drilldown_sections if drilldown_sections else '<p style="color: #718096;">Brak danych do wyświetlenia</p>'}
-        </div>
-
-        <div class="chart-container">
-            <div class="chart-title">🔄 Diagram Przepływu Statusów (Sankey)</div>
-            <div class="chart-subtitle">Czerwone przepływy oznaczają przeróbki/pętle (błędy wracające do wcześniejszych statusów)</div>
-            <div id="sankey-chart"></div>
         </div>
 
         <div class="chart-container">
@@ -485,26 +467,6 @@ class ReportGenerator:
                     {time_table_rows if time_table_rows else '<tr><td colspan="4">Brak danych</td></tr>'}
                 </tbody>
             </table>
-        </div>
-
-        <div class="chart-container">
-            <div class="chart-title loop-emphasis">🔁 Wzorce Przeróbek (Pętle)</div>
-            <div class="chart-subtitle">Top 10 wzorców gdzie błędy wróciły do wcześniejszych statusów</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Wzorzec Pętli</th>
-                        <th>Wystąpienia</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {loop_rows if loop_rows else '<tr><td colspan="2">Nie wykryto pętli</td></tr>'}
-                </tbody>
-            </table>
-            <p style="margin-top: 15px; color: #718096; font-size: 0.9em;">
-                Łączna liczba przeróbek: <strong>{loops.get('total_loops', 0)}</strong><br>
-                Dotknięte błędy: <strong>{len(loops.get('issues_with_loops', []))}</strong>
-            </p>
         </div>
 
         <div class="footer">
