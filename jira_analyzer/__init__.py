@@ -8,11 +8,34 @@ Modules:
     fetcher: Jira API connection and data fetching
     analyzer: Bug flow analysis and metrics calculation
     reporter: HTML report generation with Plotly.js visualizations
+    models: Pydantic data models for validation and type safety
 """
 
 from .fetcher import JiraFetcher
 from .analyzer import FlowAnalyzer
 from .reporter import ReportGenerator
+from .models import (
+    JiraIssue,
+    ChangelogEntry,
+    IssueSnapshot,
+    StatusCategory,
+    StatusMetrics,
+    FlowPattern,
+    DailyMetrics,
+    ProjectMetrics,
+)
 
 __version__ = "2.0.0"
-__all__ = ["JiraFetcher", "FlowAnalyzer", "ReportGenerator"]
+__all__ = [
+    "JiraFetcher",
+    "FlowAnalyzer",
+    "ReportGenerator",
+    "JiraIssue",
+    "ChangelogEntry",
+    "IssueSnapshot",
+    "StatusCategory",
+    "StatusMetrics",
+    "FlowPattern",
+    "DailyMetrics",
+    "ProjectMetrics",
+]
