@@ -38,7 +38,7 @@ class FlowAnalyzer:
     # Status category mappings for workflow analysis
     STATUS_CATEGORIES = {
         'NEW': ['new', 'to do'],
-        'IN PROGRESS': ['analysis', 'blocked', 'development', 'review',
+        'IN PROGRESS': ['analysis', 'blocked', 'development', 'in development', 'review',
                         'development done', 'to test', 'in test'],
         'CLOSED': ['rejected', 'closed', 'resolved', 'ready for uat'],
     }
@@ -439,6 +439,7 @@ class FlowAnalyzer:
                 'loops': {},
                 'time_in_status': {},
                 'timeline': {},
+                'total_issues': len(self.filtered_issues),
             }
 
         # Count transitions between statuses
