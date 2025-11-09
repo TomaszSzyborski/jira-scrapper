@@ -22,6 +22,7 @@ Example:
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -238,7 +239,8 @@ def main():
                 report_metadata,
                 flow_metrics,
                 start_date=args.start_date,
-                end_date=args.end_date
+                end_date=args.end_date,
+                jira_url=os.getenv('JIRA_URL')
             )
             report_path = generator.generate_html(args.report_output)
 
@@ -322,7 +324,8 @@ def main():
                 report_metadata,
                 flow_metrics,
                 start_date=args.start_date,
-                end_date=args.end_date
+                end_date=args.end_date,
+                jira_url=fetcher.jira_url
             )
             report_path = generator.generate_html(args.report_output)
 

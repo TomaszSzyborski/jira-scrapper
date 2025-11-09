@@ -38,7 +38,7 @@ class ReportGenerator:
         >>> print(f"Report saved to {report_path}")
     """
 
-    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None):
+    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None, jira_url: str = None):
         """
         Initialize report generator.
 
@@ -49,11 +49,13 @@ class ReportGenerator:
             flow_metrics: Flow analysis metrics from FlowAnalyzer.calculate_flow_metrics()
             start_date: Optional start date for filtering (YYYY-MM-DD)
             end_date: Optional end date for filtering (YYYY-MM-DD)
+            jira_url: Optional Jira instance URL for creating ticket links
         """
         self.metadata = metadata
         self.flow_metrics = flow_metrics
         self.start_date = start_date
         self.end_date = end_date
+        self.jira_url = jira_url
 
     def _calculate_trend(self, x_values: list, y_values: list) -> list:
         """
@@ -283,9 +285,15 @@ class ReportGenerator:
             if day['open'] > 0:
                 bug_list = ""
                 for bug in day['open_issues']:
+                    # Create ticket link if jira_url is available
+                    if self.jira_url:
+                        ticket_link = f'<a href="{self.jira_url}/browse/{bug["key"]}" target="_blank" style="color: #dc2626; text-decoration: none;"><code>{bug["key"]}</code></a>'
+                    else:
+                        ticket_link = f'<code>{bug["key"]}</code>'
+
                     bug_list += f"""
                     <tr>
-                        <td><code>{bug['key']}</code></td>
+                        <td>{ticket_link}</td>
                         <td>{bug['summary']}</td>
                         <td><span class="status-badge">{bug['status']}</span></td>
                         <td><span class="status-badge">{bug.get('current_status', 'N/A')}</span></td>
