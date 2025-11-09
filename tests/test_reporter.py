@@ -134,11 +134,10 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for stat cards (Polish)
+        # Check for stat cards (Polish) - loop stats removed in recent refactoring
         assert 'Łącznie Błędów' in content or 'Total Bugs' in content
         assert 'Łącznie Przejść' in content or 'Total Transitions' in content
         assert 'Unikalnych Statusów' in content or 'Unique Statuses' in content
-        assert 'Pętle Przeróbek' in content or 'Rework Loops' in content
 
     def test_generate_html_includes_charts(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that chart containers are included."""
@@ -185,8 +184,8 @@ class TestReportGenerator:
         assert 'Śr. Dni' in content or 'Avg Days' in content
         assert 'Mediana Dni' in content or 'Median Days' in content
 
-    def test_generate_html_includes_loop_table(self, sample_metadata, flow_metrics, temp_output_dir):
-        """Test that rework patterns table is included."""
+    def test_generate_html_loop_table_removed(self, sample_metadata, flow_metrics, temp_output_dir):
+        """Test that rework patterns table is NOT included (removed in refactoring)."""
         generator = ReportGenerator(sample_metadata, flow_metrics)
 
         output_path = temp_output_dir / 'test_report.html'
@@ -195,13 +194,12 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for loop table (Polish)
-        assert 'Wzorce Przeróbek' in content or 'Rework Patterns' in content
-        assert 'Wzorzec Pętli' in content or 'Loop Pattern' in content
-        assert 'Wystąpienia' in content or 'Occurrences' in content
+        # Loop table removed - verify it's not present
+        assert 'Wzorce Przeróbek' not in content
+        assert 'Wzorzec Pętli' not in content
 
-    def test_generate_html_with_loops_highlighted(self, sample_metadata, flow_metrics, temp_output_dir):
-        """Test that loops are highlighted in red in Sankey diagram."""
+    def test_generate_html_with_color_coded_flows(self, sample_metadata, flow_metrics, temp_output_dir):
+        """Test that flows are color-coded in Sankey diagram."""
         generator = ReportGenerator(sample_metadata, flow_metrics)
 
         output_path = temp_output_dir / 'test_report.html'
@@ -210,9 +208,11 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for red color for loops
-        # Should have both red (for loops) and gray (for normal transitions)
-        assert 'rgba(255,0,0,0.3)' in content or 'rgba(0,0,0,0.2)' in content
+        # Check for color coding:
+        # Gray for loops, green for correct flows, red for incorrect flows
+        assert 'rgba(128, 128, 128, 0.4)' in content  # Gray for loops
+        assert 'rgba(34, 197, 94, 0.4)' in content  # Green for correct
+        assert 'rgba(220, 38, 38, 0.4)' in content  # Red for incorrect
 
     def test_generate_html_styling(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that CSS styling is included."""
