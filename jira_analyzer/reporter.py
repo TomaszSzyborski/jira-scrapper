@@ -128,9 +128,13 @@ class ReportGenerator:
         # Timeline data - includes ALL history + future dates
         timeline_data = timeline.get('daily_data', [])
 
-        # Get today's date for marking future dates
+        # Get date range from metadata parameters
         from datetime import datetime
         today = datetime.now().strftime('%Y-%m-%d')
+
+        # Use metadata dates for filtering display data
+        start_date = self.metadata.get('start_date', '')
+        end_date = self.metadata.get('end_date', today)
 
         # Prepare all data for trend calculation (including future)
         all_dates = [d['date'] for d in timeline_data]
@@ -143,13 +147,18 @@ class ReportGenerator:
         closed_trend = self._calculate_trend(all_dates, all_closed_counts) if all_closed_counts else []
         open_trend = self._calculate_trend(all_dates, all_open_counts) if all_open_counts else []
 
-        # Filter data to show only passed dates (dates <= today)
+        # Filter data to show only parameter date range
         # But keep full trend lines for projection
-        passed_indices = [i for i, date in enumerate(all_dates) if date <= today]
-        dates = [all_dates[i] for i in passed_indices]
-        created_counts = [all_created_counts[i] for i in passed_indices]
-        closed_counts = [all_closed_counts[i] for i in passed_indices]
-        open_counts = [all_open_counts[i] for i in passed_indices]
+        if start_date and end_date:
+            filtered_indices = [i for i, date in enumerate(all_dates) if start_date <= date <= end_date]
+        else:
+            # Fallback: show all dates up to today
+            filtered_indices = [i for i, date in enumerate(all_dates) if date <= today]
+
+        dates = [all_dates[i] for i in filtered_indices]
+        created_counts = [all_created_counts[i] for i in filtered_indices]
+        closed_counts = [all_closed_counts[i] for i in filtered_indices]
+        open_counts = [all_open_counts[i] for i in filtered_indices]
 
         # Keep trend lines for all dates (including future) for projection
         trend_dates = all_dates
@@ -208,9 +217,16 @@ class ReportGenerator:
         </tr>
         """
 
-        # Drilldown sections for open bugs
+        # Drilldown sections for open bugs - filter to parameter date range
         drilldown_sections = ""
         for day in timeline_data:
+            # Filter drilldowns to show only dates within parameter range
+            if start_date and end_date:
+                if not (start_date <= day['date'] <= end_date):
+                    continue
+            elif day['date'] > today:
+                continue
+
             if day['open'] > 0:
                 bug_list = ""
                 for bug in day['open_issues']:
@@ -524,8 +540,8 @@ class ReportGenerator:
             shapes: [
                 {{
                     type: 'line',
-                    x0: '{today}',
-                    x1: '{today}',
+                    x0: '{end_date}',
+                    x1: '{end_date}',
                     y0: 0,
                     y1: 1,
                     yref: 'paper',
@@ -538,10 +554,10 @@ class ReportGenerator:
             ],
             annotations: [
                 {{
-                    x: '{today}',
+                    x: '{end_date}',
                     y: 1,
                     yref: 'paper',
-                    text: 'Dziś',
+                    text: 'Koniec zakresu',
                     showarrow: false,
                     xanchor: 'left',
                     yanchor: 'bottom',
@@ -580,8 +596,8 @@ class ReportGenerator:
             shapes: [
                 {{
                     type: 'line',
-                    x0: '{today}',
-                    x1: '{today}',
+                    x0: '{end_date}',
+                    x1: '{end_date}',
                     y0: 0,
                     y1: 1,
                     yref: 'paper',
@@ -594,10 +610,10 @@ class ReportGenerator:
             ],
             annotations: [
                 {{
-                    x: '{today}',
+                    x: '{end_date}',
                     y: 1,
                     yref: 'paper',
-                    text: 'Dziś',
+                    text: 'Koniec zakresu',
                     showarrow: false,
                     xanchor: 'left',
                     yanchor: 'bottom',
