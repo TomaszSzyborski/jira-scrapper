@@ -483,6 +483,7 @@ class FlowAnalyzer:
                             'key': issue['key'],
                             'summary': issue['summary'],
                             'status': status_on_date,
+                            'current_status': issue['status'],
                         })
 
             timeline_data.append({

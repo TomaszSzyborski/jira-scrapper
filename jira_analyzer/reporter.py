@@ -143,12 +143,19 @@ class ReportGenerator:
         closed_trend = self._calculate_trend(all_dates, all_closed_counts) if all_closed_counts else []
         open_trend = self._calculate_trend(all_dates, all_open_counts) if all_open_counts else []
 
-        # For display: optionally filter to date range, but keep all for trends
-        # We'll pass all data to charts - they can handle the full range
-        dates = all_dates
-        created_counts = all_created_counts
-        closed_counts = all_closed_counts
-        open_counts = all_open_counts
+        # Filter data to show only passed dates (dates <= today)
+        # But keep full trend lines for projection
+        passed_indices = [i for i, date in enumerate(all_dates) if date <= today]
+        dates = [all_dates[i] for i in passed_indices]
+        created_counts = [all_created_counts[i] for i in passed_indices]
+        closed_counts = [all_closed_counts[i] for i in passed_indices]
+        open_counts = [all_open_counts[i] for i in passed_indices]
+
+        # Keep trend lines for all dates (including future) for projection
+        trend_dates = all_dates
+        trend_created = created_trend
+        trend_closed = closed_trend
+        trend_open = open_trend
 
         # Sankey diagram data
         node_labels = all_statuses
@@ -181,11 +188,13 @@ class ReportGenerator:
             # Check if this follows the correct workflow
             is_valid_flow = is_correct_flow(from_status, to_status)
 
-            # Color coding: green for correct flows, red for loops and incorrect flows
-            if is_loop or not is_valid_flow:
-                link_colors.append('rgba(220, 38, 38, 0.4)')  # Red for loops/incorrect
-            else:
+            # Color coding: gray for loops, green for correct flows, red for incorrect flows
+            if is_loop:
+                link_colors.append('rgba(128, 128, 128, 0.4)')  # Gray for loops
+            elif is_valid_flow:
                 link_colors.append('rgba(34, 197, 94, 0.4)')  # Green for correct flows
+            else:
+                link_colors.append('rgba(220, 38, 38, 0.4)')  # Red for incorrect flows
 
         # Time in status table HTML
         time_table_rows = ""
@@ -220,6 +229,7 @@ class ReportGenerator:
                         <td><code>{bug['key']}</code></td>
                         <td>{bug['summary']}</td>
                         <td><span class="status-badge">{bug['status']}</span></td>
+                        <td><span class="status-badge">{bug.get('current_status', 'N/A')}</span></td>
                     </tr>
 """
                 drilldown_sections += f"""
@@ -233,6 +243,7 @@ class ReportGenerator:
                         <th>Klucz</th>
                         <th>Tytuł</th>
                         <th>Status tego dnia</th>
+                        <th>Aktualny status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -514,8 +525,8 @@ class ReportGenerator:
                 marker: {{ size: 6 }}
             }},
             {{
-                x: {json.dumps(dates)},
-                y: {json.dumps(created_trend)},
+                x: {json.dumps(trend_dates)},
+                y: {json.dumps(trend_created)},
                 name: 'Trend Utworzonych',
                 type: 'scatter',
                 mode: 'lines',
@@ -532,8 +543,8 @@ class ReportGenerator:
                 marker: {{ size: 6 }}
             }},
             {{
-                x: {json.dumps(dates)},
-                y: {json.dumps(closed_trend)},
+                x: {json.dumps(trend_dates)},
+                y: {json.dumps(trend_closed)},
                 name: 'Trend Zamkniętych',
                 type: 'scatter',
                 mode: 'lines',
@@ -589,8 +600,8 @@ class ReportGenerator:
                 marker: {{ color: '#f59e0b' }}
             }},
             {{
-                x: {json.dumps(dates)},
-                y: {json.dumps(open_trend)},
+                x: {json.dumps(trend_dates)},
+                y: {json.dumps(trend_open)},
                 name: 'Trend (Projekcja)',
                 type: 'scatter',
                 mode: 'lines',
