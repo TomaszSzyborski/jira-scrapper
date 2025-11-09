@@ -229,7 +229,17 @@ def main():
             print(f"  Rework loops detected: {flow_metrics.get('loops', {}).get('total_loops', 0)}")
             print(f"  Bugs with loops: {len(flow_metrics.get('loops', {}).get('issues_with_loops', []))}")
 
-            generator = ReportGenerator(cached_data['metadata'], flow_metrics)
+            # Create simplified metadata (only project and fetched_at from cache)
+            report_metadata = {
+                'project': cached_data['metadata']['project'],
+                'fetched_at': cached_data['metadata']['fetched_at']
+            }
+            generator = ReportGenerator(
+                report_metadata,
+                flow_metrics,
+                start_date=args.start_date,
+                end_date=args.end_date
+            )
             report_path = generator.generate_html(args.report_output)
 
             print(f"\nReport generated: {report_path}")
@@ -303,7 +313,17 @@ def main():
             print(f"  Rework loops detected: {flow_metrics.get('loops', {}).get('total_loops', 0)}")
             print(f"  Bugs with loops: {len(flow_metrics.get('loops', {}).get('issues_with_loops', []))}")
 
-            generator = ReportGenerator(output_data['metadata'], flow_metrics)
+            # Create simplified metadata (only project and fetched_at, not dates)
+            report_metadata = {
+                'project': output_data['metadata']['project'],
+                'fetched_at': output_data['metadata']['fetched_at']
+            }
+            generator = ReportGenerator(
+                report_metadata,
+                flow_metrics,
+                start_date=args.start_date,
+                end_date=args.end_date
+            )
             report_path = generator.generate_html(args.report_output)
 
             print(f"\nReport generated: {report_path}")

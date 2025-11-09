@@ -38,7 +38,7 @@ class ReportGenerator:
         >>> print(f"Report saved to {report_path}")
     """
 
-    def __init__(self, metadata: dict, flow_metrics: dict):
+    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None):
         """
         Initialize report generator.
 
@@ -46,12 +46,14 @@ class ReportGenerator:
             metadata: Project metadata dictionary containing:
                 - project: Project key
                 - fetched_at: ISO timestamp of data fetch
-                - start_date: Optional start date for filtering
-                - end_date: Optional end date for filtering
             flow_metrics: Flow analysis metrics from FlowAnalyzer.calculate_flow_metrics()
+            start_date: Optional start date for filtering (YYYY-MM-DD)
+            end_date: Optional end date for filtering (YYYY-MM-DD)
         """
         self.metadata = metadata
         self.flow_metrics = flow_metrics
+        self.start_date = start_date
+        self.end_date = end_date
 
     def _calculate_trend(self, x_values: list, y_values: list) -> list:
         """
@@ -128,13 +130,13 @@ class ReportGenerator:
         # Timeline data - includes ALL history + future dates
         timeline_data = timeline.get('daily_data', [])
 
-        # Get date range from metadata parameters
+        # Get date range from parameters (not from cached metadata)
         from datetime import datetime
         today = datetime.now().strftime('%Y-%m-%d')
 
-        # Use metadata dates for filtering display data (handle None and empty strings)
-        start_date = self.metadata.get('start_date') or None
-        end_date = self.metadata.get('end_date') or None
+        # Use passed dates for filtering display data (handle None and empty strings)
+        start_date = self.start_date or None
+        end_date = self.end_date or None
 
         # Prepare all data for trend calculation (including future)
         all_dates = [d['date'] for d in timeline_data]
