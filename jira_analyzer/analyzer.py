@@ -342,67 +342,138 @@ class FlowAnalyzer:
 
         return results
 
+    def _get_status_on_date(self, issue: dict, target_date: str) -> str:
+        """
+        Determine the status of an issue on a specific date.
+
+        Args:
+            issue: Issue dictionary with changelog
+            target_date: Date in YYYY-MM-DD format
+
+        Returns:
+            Status name on the target date, or None if issue didn't exist yet
+        """
+        from datetime import datetime
+
+        created_date = issue.get('created', '').split('T')[0]
+        if not created_date or target_date < created_date:
+            return None  # Issue didn't exist yet
+
+        # Start with the first status (from first changelog entry or current status)
+        changelog = issue.get('changelog', [])
+
+        if not changelog:
+            # No changelog means issue was created and never changed
+            return issue.get('status', '')
+
+        # Find the status on the target date by going through changelog
+        current_status = changelog[0]['from_string']  # Initial status
+
+        for change in changelog:
+            change_date = change['created'].split('T')[0]
+            if change_date <= target_date:
+                current_status = change['to_string']
+            else:
+                break  # Changes after target date don't apply
+
+        return current_status
+
     def calculate_timeline_metrics(self) -> dict:
         """
-        Calculate created/closed/open tickets over time.
+        Calculate created/closed/open tickets over time with daily status checking.
 
-        Generates daily statistics for bug creation, closure, and cumulative
-        open count for timeline visualization.
+        For each day in the date range, determines which bugs were open (NEW or
+        IN PROGRESS status) by examining their status history. Includes drilldown
+        data showing which specific bugs were open on each day.
 
         Returns:
             Dictionary with 'daily_data' list containing:
                 - date: Date in YYYY-MM-DD format
                 - created: Number of bugs created on this date
                 - closed: Number of bugs closed on this date
-                - open: Cumulative open bugs on this date
+                - open: Number of bugs in NEW or IN PROGRESS status on this date
+                - open_issues: List of dicts with bug details (key, summary, status)
 
         Example:
             >>> timeline = analyzer.calculate_timeline_metrics()
             >>> for day in timeline['daily_data'][:3]:
-            ...     print(f"{day['date']}: +{day['created']} -{day['closed']} ={day['open']} open")
+            ...     print(f"{day['date']}: {day['open']} bugs open")
+            ...     for bug in day['open_issues'][:2]:
+            ...         print(f"  - {bug['key']}: {bug['summary']}")
         """
-        timeline = {}
+        from datetime import datetime, timedelta
 
-        # Group issues by date
-        daily_stats = {}
+        if not self.filtered_issues:
+            return {'daily_data': []}
 
+        # Determine date range from all issues
+        all_dates = []
         for issue in self.filtered_issues:
             created_date = issue.get('created', '').split('T')[0]
-            resolved_date = issue.get('resolved', '')
-            if resolved_date:
-                resolved_date = resolved_date.split('T')[0]
-
             if created_date:
-                if created_date not in daily_stats:
-                    daily_stats[created_date] = {'created': 0, 'closed': 0}
-                daily_stats[created_date]['created'] += 1
+                all_dates.append(created_date)
+            # Include all changelog dates
+            for change in issue.get('changelog', []):
+                change_date = change['created'].split('T')[0]
+                all_dates.append(change_date)
 
-            if resolved_date:
-                if resolved_date not in daily_stats:
-                    daily_stats[resolved_date] = {'created': 0, 'closed': 0}
-                daily_stats[resolved_date]['closed'] += 1
+        if not all_dates:
+            return {'daily_data': []}
 
-        # Sort dates and calculate open count
-        sorted_dates = sorted(daily_stats.keys())
-        cumulative_open = 0
+        min_date = min(all_dates)
+        max_date = max(all_dates)
 
+        # Generate all dates in range
+        start = datetime.strptime(min_date, '%Y-%m-%d')
+        end = datetime.strptime(max_date, '%Y-%m-%d')
+        date_range = []
+        current = start
+        while current <= end:
+            date_range.append(current.strftime('%Y-%m-%d'))
+            current += timedelta(days=1)
+
+        # Calculate stats for each day
         timeline_data = []
-        for date in sorted_dates:
-            stats = daily_stats[date]
-            created = stats['created']
-            closed = stats['closed']
-            cumulative_open += created - closed
+        for date in date_range:
+            created_count = 0
+            closed_count = 0
+            open_count = 0
+            open_issues = []
+
+            for issue in self.filtered_issues:
+                # Check if created on this date
+                created_date = issue.get('created', '').split('T')[0]
+                if created_date == date:
+                    created_count += 1
+
+                # Check if closed on this date
+                resolved_date = issue.get('resolved', '')
+                if resolved_date:
+                    resolved_date = resolved_date.split('T')[0]
+                    if resolved_date == date:
+                        closed_count += 1
+
+                # Check status on this date
+                status_on_date = self._get_status_on_date(issue, date)
+                if status_on_date:
+                    category = self.categorize_status(status_on_date)
+                    if category in ['NEW', 'IN PROGRESS']:
+                        open_count += 1
+                        open_issues.append({
+                            'key': issue['key'],
+                            'summary': issue['summary'],
+                            'status': status_on_date,
+                        })
 
             timeline_data.append({
                 'date': date,
-                'created': created,
-                'closed': closed,
-                'open': max(0, cumulative_open),
+                'created': created_count,
+                'closed': closed_count,
+                'open': open_count,
+                'open_issues': open_issues,
             })
 
-        timeline['daily_data'] = timeline_data
-
-        return timeline
+        return {'daily_data': timeline_data}
 
     def calculate_flow_metrics(self) -> dict:
         """

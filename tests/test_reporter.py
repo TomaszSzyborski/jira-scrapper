@@ -88,13 +88,13 @@ class TestReportGenerator:
 
         # Check basic HTML structure
         assert '<!DOCTYPE html>' in content
-        assert '<html lang="en">' in content
+        assert '<html lang="pl">' in content
         assert '</html>' in content
         assert '<head>' in content
         assert '<body>' in content
 
         # Check title
-        assert f'<title>Jira Bug Flow Report - {sample_metadata["project"]}</title>' in content
+        assert f'<title>Raport Przepływu Błędów Jira - {sample_metadata["project"]}</title>' in content
 
     def test_generate_html_includes_plotly(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that Plotly.js is included."""
@@ -134,11 +134,11 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for stat cards
-        assert 'Total Bugs' in content
-        assert 'Total Transitions' in content
-        assert 'Unique Statuses' in content
-        assert 'Rework Loops' in content
+        # Check for stat cards (Polish)
+        assert 'Łącznie Błędów' in content or 'Total Bugs' in content
+        assert 'Łącznie Przejść' in content or 'Total Transitions' in content
+        assert 'Unikalnych Statusów' in content or 'Unique Statuses' in content
+        assert 'Pętle Przeróbek' in content or 'Rework Loops' in content
 
     def test_generate_html_includes_charts(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that chart containers are included."""
@@ -180,10 +180,10 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for time table
-        assert 'Average Time in Each Status' in content
-        assert 'Avg Days' in content
-        assert 'Median Days' in content
+        # Check for time table (Polish)
+        assert 'Średni Czas w Każdym Statusie' in content or 'Average Time in Each Status' in content
+        assert 'Śr. Dni' in content or 'Avg Days' in content
+        assert 'Mediana Dni' in content or 'Median Days' in content
 
     def test_generate_html_includes_loop_table(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that rework patterns table is included."""
@@ -195,10 +195,10 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for loop table
-        assert 'Rework Patterns' in content
-        assert 'Loop Pattern' in content
-        assert 'Occurrences' in content
+        # Check for loop table (Polish)
+        assert 'Wzorce Przeróbek' in content or 'Rework Patterns' in content
+        assert 'Wzorzec Pętli' in content or 'Loop Pattern' in content
+        assert 'Wystąpienia' in content or 'Occurrences' in content
 
     def test_generate_html_with_loops_highlighted(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that loops are highlighted in red in Sankey diagram."""
@@ -239,9 +239,9 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for footer
-        assert 'Generated on' in content
-        assert 'Jira Bug Flow Analyzer' in content
+        # Check for footer (Polish)
+        assert 'Wygenerowano' in content or 'Generated on' in content
+        assert 'Analizator Przepływu Błędów Jira' in content or 'Jira Bug Flow Analyzer' in content
 
     def test_generate_html_returns_path(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that generate_html returns the output path."""

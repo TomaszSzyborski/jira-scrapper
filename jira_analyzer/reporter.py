@@ -21,7 +21,7 @@ class ReportGenerator:
     This class creates comprehensive HTML reports displaying bug flow analysis
     with multiple interactive visualizations including:
     - Created vs Closed timeline with trend lines
-    - Open bugs timeline with trend analysis
+    - Open bugs timeline with trend analysis and drilldown
     - Sankey diagram showing status flow (with loop highlighting)
     - Time in status statistics table
     - Rework pattern analysis
@@ -96,7 +96,7 @@ class ReportGenerator:
         Creates a complete HTML report with:
         1. Summary statistics cards (bugs, transitions, loops)
         2. Created vs Closed timeline chart with trend lines
-        3. Open bugs timeline chart with trend analysis
+        3. Open bugs timeline bar chart with trend analysis and drilldown
         4. Sankey flow diagram (red highlighting for loops)
         5. Time in status table with averages
         6. Rework patterns table showing top 10 loops
@@ -188,13 +188,46 @@ class ReportGenerator:
         </tr>
         """
 
+        # Drilldown sections for open bugs
+        drilldown_sections = ""
+        for day in timeline_data:
+            if day['open'] > 0:
+                bug_list = ""
+                for bug in day['open_issues']:
+                    bug_list += f"""
+                    <tr>
+                        <td><code>{bug['key']}</code></td>
+                        <td>{bug['summary']}</td>
+                        <td><span class="status-badge">{bug['status']}</span></td>
+                    </tr>
+"""
+                drilldown_sections += f"""
+        <details class="drilldown-section">
+            <summary>
+                <strong>{day['date']}</strong>: {day['open']} otwartych błędów
+            </summary>
+            <table class="drilldown-table">
+                <thead>
+                    <tr>
+                        <th>Klucz</th>
+                        <th>Tytuł</th>
+                        <th>Status tego dnia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {bug_list}
+                </tbody>
+            </table>
+        </details>
+"""
+
         # Generate HTML
         html_content = f"""<!DOCTYPE html>
-        <html lang="en">
+        <html lang="pl">
         <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Jira Bug Flow Report - {self.metadata['project']}</title>
+        <title>Raport Przepływu Błędów Jira - {self.metadata['project']}</title>
         <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
         <style>
         * {{
@@ -310,111 +343,150 @@ class ReportGenerator:
             font-size: 0.9em;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }}
+        .drilldown-section {{
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }}
+        .drilldown-section summary {{
+            cursor: pointer;
+            padding: 10px;
+            font-size: 1.1em;
+            user-select: none;
+        }}
+        .drilldown-section summary:hover {{
+            background-color: #e2e8f0;
+            border-radius: 4px;
+        }}
+        .drilldown-table {{
+            margin-top: 15px;
+            font-size: 0.9em;
+        }}
+        .status-badge {{
+            background-color: #e0e7ff;
+            color: #3730a3;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }}
+        code {{
+            background-color: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #dc2626;
+        }}
         </style>
         </head>
         <body>
         <div class="container">
         <div class="header">
-            <h1>🐛 Jira Bug Flow Analysis</h1>
+            <h1>🐛 Analiza Przepływu Błędów Jira</h1>
             <div class="metadata">
-                <strong>Project:</strong> {self.metadata['project']}<br>
-                <strong>Fetched:</strong> {self.metadata.get('fetched_at', 'N/A')}<br>
-                <strong>Date Range:</strong> {self.metadata.get('start_date', 'All')} to {self.metadata.get('end_date', 'All')}<br>
-                <strong>Total Bugs:</strong> {self.flow_metrics.get('total_issues', 0)}
+                <strong>Projekt:</strong> {self.metadata['project']}<br>
+                <strong>Pobrano:</strong> {self.metadata.get('fetched_at', 'N/A')}<br>
+                <strong>Zakres dat:</strong> {self.metadata.get('start_date', 'Wszystkie')} do {self.metadata.get('end_date', 'Wszystkie')}<br>
+                <strong>Łącznie błędów:</strong> {self.flow_metrics.get('total_issues', 0)}
             </div>
         </div>
 
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-label">Total Bugs</div>
+                <div class="stat-label">Łącznie Błędów</div>
                 <div class="stat-value">{self.flow_metrics.get('total_issues', 0)}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Total Transitions</div>
+                <div class="stat-label">Łącznie Przejść</div>
                 <div class="stat-value">{self.flow_metrics['total_transitions']}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Unique Statuses</div>
+                <div class="stat-label">Unikalnych Statusów</div>
                 <div class="stat-value">{self.flow_metrics['unique_statuses']}</div>
             </div>
             <div class="stat-card warning">
-                <div class="stat-label">Rework Loops</div>
+                <div class="stat-label">Pętle Przeróbek</div>
                 <div class="stat-value loop-emphasis">{loops.get('total_loops', 0)}</div>
             </div>
             <div class="stat-card warning">
-                <div class="stat-label">Bugs with Loops</div>
+                <div class="stat-label">Błędy z Pętlami</div>
                 <div class="stat-value loop-emphasis">{len(loops.get('issues_with_loops', []))}</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">📈 Created vs Closed Bugs Over Time</div>
-            <div class="chart-subtitle">Daily bug creation and closure with trend lines</div>
+            <div class="chart-title">📈 Utworzone vs Zamknięte Błędy w Czasie</div>
+            <div class="chart-subtitle">Dzienne tworzenie i zamykanie błędów z liniami trendu</div>
             <div id="timeline-chart"></div>
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">📊 Open Bugs Over Time</div>
-            <div class="chart-subtitle">Cumulative open bugs with trend analysis</div>
+            <div class="chart-title">📊 Otwarte Błędy w Czasie</div>
+            <div class="chart-subtitle">Liczba błędów w statusie NEW lub IN PROGRESS każdego dnia z analizą trendu</div>
             <div id="open-chart"></div>
+
+            <h3 style="margin-top: 30px; margin-bottom: 15px; color: #2d3748;">🔍 Szczegóły otwartych błędów dzień po dniu</h3>
+            {drilldown_sections if drilldown_sections else '<p style="color: #718096;">Brak danych do wyświetlenia</p>'}
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">🔄 Status Flow Diagram (Sankey)</div>
-            <div class="chart-subtitle">Red flows indicate rework/loops (bugs going backward in the process)</div>
+            <div class="chart-title">🔄 Diagram Przepływu Statusów (Sankey)</div>
+            <div class="chart-subtitle">Czerwone przepływy oznaczają przeróbki/pętle (błędy wracające do wcześniejszych statusów)</div>
             <div id="sankey-chart"></div>
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">⏱️ Average Time in Each Status</div>
-            <div class="chart-subtitle">How long bugs spend in each status (in days)</div>
+            <div class="chart-title">⏱️ Średni Czas w Każdym Statusie</div>
+            <div class="chart-subtitle">Jak długo błędy spędzają w poszczególnych statusach (w dniach)</div>
             <table>
                 <thead>
                     <tr>
                         <th>Status</th>
-                        <th>Avg Days</th>
-                        <th>Median Days</th>
-                        <th>Count</th>
+                        <th>Śr. Dni</th>
+                        <th>Mediana Dni</th>
+                        <th>Liczba</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {time_table_rows if time_table_rows else '<tr><td colspan="4">No data available</td></tr>'}
+                    {time_table_rows if time_table_rows else '<tr><td colspan="4">Brak danych</td></tr>'}
                 </tbody>
             </table>
         </div>
 
         <div class="chart-container">
-            <div class="chart-title loop-emphasis">🔁 Rework Patterns (Loops)</div>
-            <div class="chart-subtitle">Top 10 patterns where bugs went backwards in the workflow</div>
+            <div class="chart-title loop-emphasis">🔁 Wzorce Przeróbek (Pętle)</div>
+            <div class="chart-subtitle">Top 10 wzorców gdzie błędy wróciły do wcześniejszych statusów</div>
             <table>
                 <thead>
                     <tr>
-                        <th>Loop Pattern</th>
-                        <th>Occurrences</th>
+                        <th>Wzorzec Pętli</th>
+                        <th>Wystąpienia</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {loop_rows if loop_rows else '<tr><td colspan="2">No loops detected</td></tr>'}
+                    {loop_rows if loop_rows else '<tr><td colspan="2">Nie wykryto pętli</td></tr>'}
                 </tbody>
             </table>
             <p style="margin-top: 15px; color: #718096; font-size: 0.9em;">
-                Total rework instances: <strong>{loops.get('total_loops', 0)}</strong><br>
-                Bugs affected: <strong>{len(loops.get('issues_with_loops', []))}</strong>
+                Łączna liczba przeróbek: <strong>{loops.get('total_loops', 0)}</strong><br>
+                Dotknięte błędy: <strong>{len(loops.get('issues_with_loops', []))}</strong>
             </p>
         </div>
 
         <div class="footer">
-            Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Jira Bug Flow Analyzer v2.0
+            Wygenerowano {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Analizator Przepływu Błędów Jira v2.0
         </div>
         </div>
 
         <script>
-        // Created vs Closed Timeline
+        // Utworzone vs Zamknięte Timeline
         const timelineData = [
             {{
                 x: {json.dumps(dates)},
                 y: {json.dumps(created_counts)},
-                name: 'Created',
+                name: 'Utworzone',
                 type: 'scatter',
                 mode: 'lines+markers',
                 line: {{ color: '#3b82f6', width: 2 }},
@@ -423,7 +495,7 @@ class ReportGenerator:
             {{
                 x: {json.dumps(dates)},
                 y: {json.dumps(created_trend)},
-                name: 'Created Trend',
+                name: 'Trend Utworzonych',
                 type: 'scatter',
                 mode: 'lines',
                 line: {{ color: '#3b82f6', width: 2, dash: 'dash' }},
@@ -432,7 +504,7 @@ class ReportGenerator:
             {{
                 x: {json.dumps(dates)},
                 y: {json.dumps(closed_counts)},
-                name: 'Closed',
+                name: 'Zamknięte',
                 type: 'scatter',
                 mode: 'lines+markers',
                 line: {{ color: '#10b981', width: 2 }},
@@ -441,7 +513,7 @@ class ReportGenerator:
             {{
                 x: {json.dumps(dates)},
                 y: {json.dumps(closed_trend)},
-                name: 'Closed Trend',
+                name: 'Trend Zamkniętych',
                 type: 'scatter',
                 mode: 'lines',
                 line: {{ color: '#10b981', width: 2, dash: 'dash' }},
@@ -450,8 +522,8 @@ class ReportGenerator:
         ];
 
         const timelineLayout = {{
-            xaxis: {{ title: 'Date' }},
-            yaxis: {{ title: 'Number of Bugs' }},
+            xaxis: {{ title: 'Data' }},
+            yaxis: {{ title: 'Liczba Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
             height: 400
@@ -459,17 +531,14 @@ class ReportGenerator:
 
         Plotly.newPlot('timeline-chart', timelineData, timelineLayout, {{responsive: true}});
 
-        // Open Bugs Timeline
+        // Otwarte Błędy Timeline - wykres słupkowy
         const openData = [
             {{
                 x: {json.dumps(dates)},
                 y: {json.dumps(open_counts)},
-                name: 'Open Bugs',
-                type: 'scatter',
-                mode: 'lines+markers',
-                fill: 'tozeroy',
-                line: {{ color: '#f59e0b', width: 2 }},
-                marker: {{ size: 6 }}
+                name: 'Otwarte Błędy',
+                type: 'bar',
+                marker: {{ color: '#f59e0b' }}
             }},
             {{
                 x: {json.dumps(dates)},
@@ -482,8 +551,8 @@ class ReportGenerator:
         ];
 
         const openLayout = {{
-            xaxis: {{ title: 'Date' }},
-            yaxis: {{ title: 'Open Bugs' }},
+            xaxis: {{ title: 'Data' }},
+            yaxis: {{ title: 'Liczba Otwartych Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
             height: 400
@@ -491,7 +560,7 @@ class ReportGenerator:
 
         Plotly.newPlot('open-chart', openData, openLayout, {{responsive: true}});
 
-        // Sankey diagram
+        // Diagram Sankey
         const sankeyData = [{{
             type: "sankey",
             orientation: "h",
