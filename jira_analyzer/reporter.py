@@ -123,17 +123,30 @@ class ReportGenerator:
         time_in_status = self.flow_metrics.get('time_in_status', {})
         timeline = self.flow_metrics.get('timeline', {})
 
-        # Timeline data
+        # Timeline data - includes ALL history + future dates
         timeline_data = timeline.get('daily_data', [])
-        dates = [d['date'] for d in timeline_data]
-        created_counts = [d['created'] for d in timeline_data]
-        closed_counts = [d['closed'] for d in timeline_data]
-        open_counts = [d['open'] for d in timeline_data]
 
-        # Calculate trends
-        created_trend = self._calculate_trend(dates, created_counts) if created_counts else []
-        closed_trend = self._calculate_trend(dates, closed_counts) if closed_counts else []
-        open_trend = self._calculate_trend(dates, open_counts) if open_counts else []
+        # Get today's date for marking future dates
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
+
+        # Prepare all data for trend calculation (including future)
+        all_dates = [d['date'] for d in timeline_data]
+        all_created_counts = [d['created'] for d in timeline_data]
+        all_closed_counts = [d['closed'] for d in timeline_data]
+        all_open_counts = [d['open'] for d in timeline_data]
+
+        # Calculate trends using ALL data (past + future)
+        created_trend = self._calculate_trend(all_dates, all_created_counts) if all_created_counts else []
+        closed_trend = self._calculate_trend(all_dates, all_closed_counts) if all_closed_counts else []
+        open_trend = self._calculate_trend(all_dates, all_open_counts) if all_open_counts else []
+
+        # For display: optionally filter to date range, but keep all for trends
+        # We'll pass all data to charts - they can handle the full range
+        dates = all_dates
+        created_counts = all_created_counts
+        closed_counts = all_closed_counts
+        open_counts = all_open_counts
 
         # Sankey diagram data
         node_labels = all_statuses
@@ -526,7 +539,34 @@ class ReportGenerator:
             yaxis: {{ title: 'Liczba Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
-            height: 400
+            height: 400,
+            shapes: [
+                {{
+                    type: 'line',
+                    x0: '{today}',
+                    x1: '{today}',
+                    y0: 0,
+                    y1: 1,
+                    yref: 'paper',
+                    line: {{
+                        color: 'rgba(128, 128, 128, 0.5)',
+                        width: 2,
+                        dash: 'dot'
+                    }}
+                }}
+            ],
+            annotations: [
+                {{
+                    x: '{today}',
+                    y: 1,
+                    yref: 'paper',
+                    text: 'Dziś',
+                    showarrow: false,
+                    xanchor: 'left',
+                    yanchor: 'bottom',
+                    font: {{ size: 10, color: 'gray' }}
+                }}
+            ]
         }};
 
         Plotly.newPlot('timeline-chart', timelineData, timelineLayout, {{responsive: true}});
@@ -543,7 +583,7 @@ class ReportGenerator:
             {{
                 x: {json.dumps(dates)},
                 y: {json.dumps(open_trend)},
-                name: 'Trend',
+                name: 'Trend (Projekcja)',
                 type: 'scatter',
                 mode: 'lines',
                 line: {{ color: '#dc2626', width: 3, dash: 'dash' }}
@@ -555,7 +595,34 @@ class ReportGenerator:
             yaxis: {{ title: 'Liczba Otwartych Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
-            height: 400
+            height: 400,
+            shapes: [
+                {{
+                    type: 'line',
+                    x0: '{today}',
+                    x1: '{today}',
+                    y0: 0,
+                    y1: 1,
+                    yref: 'paper',
+                    line: {{
+                        color: 'rgba(128, 128, 128, 0.5)',
+                        width: 2,
+                        dash: 'dot'
+                    }}
+                }}
+            ],
+            annotations: [
+                {{
+                    x: '{today}',
+                    y: 1,
+                    yref: 'paper',
+                    text: 'Dziś',
+                    showarrow: false,
+                    xanchor: 'left',
+                    yanchor: 'bottom',
+                    font: {{ size: 10, color: 'gray' }}
+                }}
+            ]
         }};
 
         Plotly.newPlot('open-chart', openData, openLayout, {{responsive: true}});

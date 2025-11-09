@@ -378,13 +378,19 @@ class FlowAnalyzer:
 
         return current_status
 
-    def calculate_timeline_metrics(self) -> dict:
+    def calculate_timeline_metrics(self, future_days: int = 30) -> dict:
         """
         Calculate created/closed/open tickets over time with daily status checking.
+
+        IMPORTANT: Uses ALL issues (not just filtered), then allows filtering at
+        display level. Includes future dates for trend projection.
 
         For each day in the date range, determines which bugs were open (NEW or
         IN PROGRESS status) by examining their status history. Includes drilldown
         data showing which specific bugs were open on each day.
+
+        Args:
+            future_days: Number of days to project into the future for trend analysis (default: 30)
 
         Returns:
             Dictionary with 'daily_data' list containing:
@@ -400,15 +406,23 @@ class FlowAnalyzer:
             ...     print(f"{day['date']}: {day['open']} bugs open")
             ...     for bug in day['open_issues'][:2]:
             ...         print(f"  - {bug['key']}: {bug['summary']}")
+
+        Note:
+            Timeline is calculated for ALL issues in the project, regardless of
+            start_date/end_date filters. This allows proper trend analysis and
+            future projections. Filtering should be applied at the display level.
         """
         from datetime import datetime, timedelta
 
-        if not self.filtered_issues:
+        # Use ALL issues for timeline calculation, not filtered_issues
+        all_issues = self.issues
+
+        if not all_issues:
             return {'daily_data': []}
 
-        # Determine date range from all issues
+        # Determine date range from ALL issues (not filtered)
         all_dates = []
-        for issue in self.filtered_issues:
+        for issue in all_issues:
             created_date = issue.get('created', '').split('T')[0]
             if created_date:
                 all_dates.append(created_date)
@@ -423,9 +437,14 @@ class FlowAnalyzer:
         min_date = min(all_dates)
         max_date = max(all_dates)
 
-        # Generate all dates in range
+        # Extend range into the future for trend projection
         start = datetime.strptime(min_date, '%Y-%m-%d')
         end = datetime.strptime(max_date, '%Y-%m-%d')
+
+        # Add future days for trend reference
+        end = end + timedelta(days=future_days)
+
+        # Generate all dates in range (including future)
         date_range = []
         current = start
         while current <= end:
@@ -440,7 +459,8 @@ class FlowAnalyzer:
             open_count = 0
             open_issues = []
 
-            for issue in self.filtered_issues:
+            # Use ALL issues for calculation
+            for issue in all_issues:
                 # Check if created on this date
                 created_date = issue.get('created', '').split('T')[0]
                 if created_date == date:
