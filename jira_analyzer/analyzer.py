@@ -137,7 +137,7 @@ class FlowAnalyzer:
         - Time duration in each status
         - Status categories
 
-        IMPORTANT: Uses ALL issues (not filtered) for complete flow analysis.
+        IMPORTANT: Uses filtered issues based on date range and label filters.
 
         Returns:
             DataFrame with columns: issue_key, from_status, to_status,
@@ -150,8 +150,8 @@ class FlowAnalyzer:
         """
         transitions = []
 
-        # Use ALL issues for flow analysis (not filtered by date)
-        for issue in self.issues:
+        # Use filtered issues for flow analysis (filtered by date range/label)
+        for issue in self.filtered_issues:
             issue_key = issue['key']
             current_status = issue['status']
             changelog = issue.get('changelog', [])
@@ -248,7 +248,7 @@ class FlowAnalyzer:
         Identifies when bugs return to a previous status, indicating rework.
         For example: "In Test" → "Development" → "In Test" contains a loop.
 
-        IMPORTANT: Uses ALL issues (not filtered) for complete loop analysis.
+        IMPORTANT: Uses filtered issues based on date range and label filters.
 
         Returns:
             Dictionary with:
@@ -270,8 +270,8 @@ class FlowAnalyzer:
         issues_with_loops = set()
         loop_patterns = {}
 
-        # Use ALL issues for loop detection (not filtered by date)
-        for issue in self.issues:
+        # Use filtered issues for loop detection (filtered by date range/label)
+        for issue in self.filtered_issues:
             changelog = issue.get('changelog', [])
             if len(changelog) < 2:
                 continue

@@ -159,6 +159,11 @@ class ReportGenerator:
         closed_counts = [all_closed_counts[i] for i in filtered_indices]
         open_counts = [all_open_counts[i] for i in filtered_indices]
 
+        # Calculate current open bugs count BEFORE extending with zeros
+        current_open_bugs = 0
+        if open_counts:
+            current_open_bugs = open_counts[-1]  # Last value in actual data range
+
         # Extend to end_date with zeros for trend projection
         if end_date and end_date > today and dates:
             # Generate dates from last date + 1 to end_date
@@ -245,11 +250,6 @@ class ReportGenerator:
             <td>{stats['count']}</td>
         </tr>
         """
-
-        # Calculate current open bugs count (latest date in filtered range)
-        current_open_bugs = 0
-        if open_counts:
-            current_open_bugs = open_counts[-1]  # Last value in filtered range
 
         # Calculate actual date range for drilldowns (same as for graphs)
         if start_date or end_date:
@@ -466,7 +466,7 @@ class ReportGenerator:
             <div class="metadata">
                 <strong>Projekt:</strong> {self.metadata['project']}<br>
                 <strong>Pobrano:</strong> {self.metadata.get('fetched_at', 'N/A')}<br>
-                <strong>Zakres dat:</strong> {self.metadata.get('start_date', 'Wszystkie')} do {self.metadata.get('end_date', 'Wszystkie')}<br>
+                <strong>Zakres dat:</strong> {self.start_date or 'Wszystkie'} do {self.end_date or 'Wszystkie'}<br>
                 <strong>Łącznie błędów:</strong> {self.flow_metrics.get('total_issues', 0)}
             </div>
         </div>
