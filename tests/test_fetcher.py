@@ -81,8 +81,8 @@ class TestJiraFetcher:
         assert 'type in (Bug, "Błąd w programie")' in jql
         assert 'ORDER BY created ASC' in jql
 
-    def test_build_jql_with_label(self, monkeypatch):
-        """Test JQL building with label filter."""
+    def test_build_jql_ignores_label(self, monkeypatch):
+        """Test that JQL building does NOT include label filter (label filtering is in analyzer)."""
         monkeypatch.setenv('JIRA_URL', 'https://test.atlassian.net')
         monkeypatch.setenv('JIRA_EMAIL', 'test@example.com')
         monkeypatch.setenv('JIRA_API_TOKEN', 'test_token')
@@ -90,10 +90,10 @@ class TestJiraFetcher:
         monkeypatch.setattr('jira_analyzer.fetcher.JIRA', lambda **kwargs: mock_jira)
 
         fetcher = JiraFetcher()
-        jql = fetcher.build_jql('PROJ', label='Sprint-1')
+        jql = fetcher.build_jql('PROJ')
 
         assert 'project = "PROJ"' in jql
-        assert "labels = 'Sprint-1'" in jql
+        assert 'labels' not in jql  # Label filtering should NOT be in JQL
         assert 'type in (Bug, "Błąd w programie")' in jql
 
     def test_fetch_issues(self, monkeypatch, fake_issues):

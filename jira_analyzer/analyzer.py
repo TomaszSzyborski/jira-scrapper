@@ -25,12 +25,13 @@ class FlowAnalyzer:
     Attributes:
         STATUS_CATEGORIES: Mapping of statuses to workflow categories
         issues: All issues from Jira
-        filtered_issues: Issues filtered by date range
+        filtered_issues: Issues filtered by date range and/or label
         start_date: Optional start date for filtering
         end_date: Optional end date for filtering
+        label: Optional label for filtering
 
     Example:
-        >>> analyzer = FlowAnalyzer(issues, start_date='2024-01-01')
+        >>> analyzer = FlowAnalyzer(issues, start_date='2024-01-01', label='Sprint-1')
         >>> metrics = analyzer.calculate_flow_metrics()
         >>> print(f"Detected {metrics['loops']['total_loops']} rework loops")
     """
@@ -43,7 +44,7 @@ class FlowAnalyzer:
         'CLOSED': ['rejected', 'closed', 'resolved', 'ready for uat'],
     }
 
-    def __init__(self, issues: list, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    def __init__(self, issues: list, start_date: Optional[str] = None, end_date: Optional[str] = None, label: Optional[str] = None):
         """
         Initialize flow analyzer with issues.
 
@@ -51,41 +52,49 @@ class FlowAnalyzer:
             issues: List of issue dictionaries from Jira
             start_date: Optional start date for filtering (YYYY-MM-DD)
             end_date: Optional end date for filtering (YYYY-MM-DD)
+            label: Optional label for filtering
         """
         self.issues = issues
         self.start_date = start_date
         self.end_date = end_date
+        self.label = label
 
-        # Filter issues by date if provided
-        if start_date or end_date:
-            self.filtered_issues = self._filter_issues_by_date()
+        # Filter issues by date and/or label if provided
+        if start_date or end_date or label:
+            self.filtered_issues = self._filter_issues()
         else:
             self.filtered_issues = issues
 
-    def _filter_issues_by_date(self) -> list:
+    def _filter_issues(self) -> list:
         """
-        Filter issues by creation date.
+        Filter issues by creation date and/or label.
 
-        Filters the issue list based on start_date and end_date parameters.
+        Filters the issue list based on start_date, end_date and label parameters.
 
         Returns:
             Filtered list of issues
 
         Note:
-            Only the creation date is used for filtering, not resolution date.
+            Only the creation date is used for date filtering, not resolution date.
+            Label filtering checks if the issue has the specified label.
         """
         filtered = []
         for issue in self.issues:
+            # Date filtering
             created = issue.get('created', '')
-            if not created:
-                continue
+            if created:
+                created_date = created.split('T')[0]  # Extract YYYY-MM-DD
 
-            created_date = created.split('T')[0]  # Extract YYYY-MM-DD
+                if self.start_date and created_date < self.start_date:
+                    continue
+                if self.end_date and created_date > self.end_date:
+                    continue
 
-            if self.start_date and created_date < self.start_date:
-                continue
-            if self.end_date and created_date > self.end_date:
-                continue
+            # Label filtering
+            if self.label:
+                issue_labels = issue.get('labels', [])
+                if self.label not in issue_labels:
+                    continue
 
             filtered.append(issue)
 

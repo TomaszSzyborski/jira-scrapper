@@ -40,6 +40,28 @@ class TestFlowAnalyzer:
         assert 'PROJ-104' in keys
         assert 'PROJ-105' in keys
 
+    def test_filter_issues_by_label(self, fake_issues):
+        """Test label filtering logic."""
+        analyzer = FlowAnalyzer(fake_issues, label='mobile')
+
+        # Only issues with 'mobile' label should be included
+        assert len(analyzer.filtered_issues) > 0
+        for issue in analyzer.filtered_issues:
+            assert 'mobile' in issue['labels']
+
+    def test_filter_issues_by_date_and_label(self, fake_issues):
+        """Test combined date and label filtering."""
+        analyzer = FlowAnalyzer(fake_issues, start_date='2024-01-15', end_date='2024-01-20', label='ui')
+
+        # Should filter by both criteria
+        assert len(analyzer.filtered_issues) >= 0
+        for issue in analyzer.filtered_issues:
+            # Check date range
+            created_date = issue['created'].split('T')[0]
+            assert '2024-01-15' <= created_date <= '2024-01-20'
+            # Check label
+            assert 'ui' in issue['labels']
+
     def test_categorize_status_new(self, fake_issues):
         """Test status categorization for NEW category."""
         analyzer = FlowAnalyzer(fake_issues)

@@ -23,13 +23,16 @@ class JiraFetcher:
     builds JQL queries to fetch only bugs, and retrieves issue data including
     complete changelog information for flow analysis.
 
+    Note: This fetcher retrieves ALL bugs for a project. Filtering by dates
+    or labels is done in the analysis phase (FlowAnalyzer), not during fetch.
+
     Attributes:
         jira_url (str): Jira instance URL
         jira (JIRA): Authenticated Jira client instance
 
     Example:
         >>> fetcher = JiraFetcher()
-        >>> issues = fetcher.fetch_issues(project='PROJ', label='Sprint-1')
+        >>> issues = fetcher.fetch_issues(project='PROJ')
     """
 
     def __init__(self):
@@ -81,34 +84,29 @@ class JiraFetcher:
         project: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        label: Optional[str] = None,
     ) -> str:
         """
         Build JQL query to fetch bugs only.
 
-        Note: Date filtering is done in Python analysis, not in JQL, to allow
-        fetching all bugs once and analyzing different time periods.
+        Note: Date and label filtering is done in Python analysis, not in JQL, to allow
+        fetching all bugs once and analyzing different time periods and label subsets.
 
         Args:
             project: Jira project key (e.g., 'PROJ')
             start_date: Not used in JQL (kept for backwards compatibility)
             end_date: Not used in JQL (kept for backwards compatibility)
-            label: Optional label to filter by
 
         Returns:
             JQL query string that fetches only bugs
 
         Example:
             >>> fetcher = JiraFetcher()
-            >>> jql = fetcher.build_jql('PROJ', label='Sprint-1')
+            >>> jql = fetcher.build_jql('PROJ')
             >>> print(jql)
-            'project = "PROJ" AND type in (Bug, "Błąd w programie") AND labels = 'Sprint-1' ORDER BY created ASC'
+            'project = "PROJ" AND type in (Bug, "Błąd w programie") ORDER BY created ASC'
         """
-        # Fetch only bugs - date filtering happens in Python
+        # Fetch ALL bugs - date and label filtering happens in Python
         jql_parts = [f'project = "{project}"', 'type in (Bug, "Błąd w programie")']
-
-        if label:
-            jql_parts.append(f"labels = '{label}'")
 
         jql = " AND ".join(jql_parts)
         jql += " ORDER BY created ASC"
@@ -120,20 +118,20 @@ class JiraFetcher:
         project: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        label: Optional[str] = None,
         batch_size: int = 100,
     ) -> list:
         """
         Fetch issues from Jira using JQL.
 
-        Retrieves all bugs matching the criteria with full changelog information.
+        Retrieves all bugs with full changelog information.
         Results are fetched in batches to handle large datasets efficiently.
+
+        Note: Date and label filtering is done in Python analysis, not here.
 
         Args:
             project: Jira project key
             start_date: Optional start date (not used in JQL, for compatibility)
             end_date: Optional end date (not used in JQL, for compatibility)
-            label: Optional label to filter by
             batch_size: Number of issues to fetch per request (default: 100)
 
         Returns:
@@ -144,7 +142,7 @@ class JiraFetcher:
             >>> issues = fetcher.fetch_issues('PROJ', batch_size=50)
             >>> print(f"Fetched {len(issues)} bugs")
         """
-        jql = self.build_jql(project, start_date, end_date, label)
+        jql = self.build_jql(project, start_date, end_date)
         print(f"\nJQL Query: {jql}")
 
         issues = []

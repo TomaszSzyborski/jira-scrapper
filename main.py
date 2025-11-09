@@ -216,7 +216,8 @@ def main():
             analyzer = FlowAnalyzer(
                 cached_data['issues'],
                 start_date=args.start_date,
-                end_date=args.end_date
+                end_date=args.end_date,
+                label=args.label
             )
             flow_metrics = analyzer.calculate_flow_metrics()
 
@@ -252,7 +253,6 @@ def main():
             project=args.project,
             start_date=args.start_date,
             end_date=args.end_date,
-            label=args.label,
             batch_size=args.batch_size,
         )
 
@@ -290,7 +290,8 @@ def main():
             analyzer = FlowAnalyzer(
                 issues,
                 start_date=args.start_date,
-                end_date=args.end_date
+                end_date=args.end_date,
+                label=args.label
             )
             flow_metrics = analyzer.calculate_flow_metrics()
 
