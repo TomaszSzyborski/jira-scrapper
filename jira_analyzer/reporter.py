@@ -142,15 +142,11 @@ class ReportGenerator:
         all_closed_counts = [d['closed'] for d in timeline_data]
         all_open_counts = [d['open'] for d in timeline_data]
 
-        # Calculate trends using ALL data (past + future)
-        created_trend = self._calculate_trend(all_dates, all_created_counts) if all_created_counts else []
-        closed_trend = self._calculate_trend(all_dates, all_closed_counts) if all_closed_counts else []
-        open_trend = self._calculate_trend(all_dates, all_open_counts) if all_open_counts else []
-
-        # Filter data to show only parameter date range
-        # But keep full trend lines for projection
+        # Filter data to show only PASSED dates (no future dates)
         if start_date and end_date:
-            filtered_indices = [i for i, date in enumerate(all_dates) if start_date <= date <= end_date]
+            # Use parameter range, but limit to today
+            actual_end = min(end_date, today)
+            filtered_indices = [i for i, date in enumerate(all_dates) if start_date <= date <= actual_end]
         else:
             # Fallback: show all dates up to today
             filtered_indices = [i for i, date in enumerate(all_dates) if date <= today]
@@ -160,11 +156,10 @@ class ReportGenerator:
         closed_counts = [all_closed_counts[i] for i in filtered_indices]
         open_counts = [all_open_counts[i] for i in filtered_indices]
 
-        # Keep trend lines for all dates (including future) for projection
-        trend_dates = all_dates
-        trend_created = created_trend
-        trend_closed = closed_trend
-        trend_open = open_trend
+        # Calculate trends using ONLY passed dates (no future projection)
+        created_trend = self._calculate_trend(dates, created_counts) if created_counts else []
+        closed_trend = self._calculate_trend(dates, closed_counts) if closed_counts else []
+        open_trend = self._calculate_trend(dates, open_counts) if open_counts else []
 
         # Sankey diagram data
         node_labels = all_statuses
@@ -176,7 +171,7 @@ class ReportGenerator:
         link_labels = []
         link_colors = []
 
-        # Color flows based on correctness: green for correct, red for loops/incorrect
+        # Build Sankey diagram flows - all flows in gray
         for pattern in flow_patterns:
             from_status = pattern['from']
             to_status = pattern['to']
@@ -187,23 +182,8 @@ class ReportGenerator:
             values.append(count)
             link_labels.append(f"{from_status} → {to_status}: {count}")
 
-            # Check if this is a backward/loop transition
-            is_loop = False
-            for loop in loops.get('common_loops', []):
-                if f"{to_status} ← {from_status}" in loop['pattern']:
-                    is_loop = True
-                    break
-
-            # Check if this follows the correct workflow
-            is_valid_flow = is_correct_flow(from_status, to_status)
-
-            # Color coding: gray for loops, green for correct flows, red for incorrect flows
-            if is_loop:
-                link_colors.append('rgba(128, 128, 128, 0.4)')  # Gray for loops
-            elif is_valid_flow:
-                link_colors.append('rgba(34, 197, 94, 0.4)')  # Green for correct flows
-            else:
-                link_colors.append('rgba(220, 38, 38, 0.4)')  # Red for incorrect flows
+            # All flows are gray
+            link_colors.append('rgba(128, 128, 128, 0.4)')
 
         # Time in status table HTML
         time_table_rows = ""
@@ -217,12 +197,18 @@ class ReportGenerator:
         </tr>
         """
 
+        # Calculate current open bugs count (latest date in filtered range)
+        current_open_bugs = 0
+        if open_counts:
+            current_open_bugs = open_counts[-1]  # Last value in filtered range
+
         # Drilldown sections for open bugs - filter to parameter date range
         drilldown_sections = ""
         for day in timeline_data:
             # Filter drilldowns to show only dates within parameter range
             if start_date and end_date:
-                if not (start_date <= day['date'] <= end_date):
+                actual_end = min(end_date, today)
+                if not (start_date <= day['date'] <= actual_end):
                     continue
             elif day['date'] > today:
                 continue
@@ -433,16 +419,8 @@ class ReportGenerator:
 
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-label">Łącznie Błędów</div>
-                <div class="stat-value">{self.flow_metrics.get('total_issues', 0)}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Łącznie Przejść</div>
-                <div class="stat-value">{self.flow_metrics['total_transitions']}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Unikalnych Statusów</div>
-                <div class="stat-value">{self.flow_metrics['unique_statuses']}</div>
+                <div class="stat-label">Obecnie Otwarte Błędy</div>
+                <div class="stat-value">{current_open_bugs}</div>
             </div>
         </div>
 
@@ -454,7 +432,10 @@ class ReportGenerator:
 
         <div class="chart-container">
             <div class="chart-title">🔄 Diagram Przepływu Statusów (Sankey)</div>
-            <div class="chart-subtitle">Przepływy: <span style="color: #22c55e;">zielone</span> = poprawny workflow, <span style="color: #dc2626;">czerwone</span> = niepoprawny przepływ, <span style="color: #808080;">szare</span> = pętle/powroty</div>
+            <div class="chart-subtitle">Wszystkie przejścia między statusami</div>
+            <div style="margin-bottom: 15px; color: #718096;">
+                <strong>Łącznie przejść:</strong> {self.flow_metrics['total_transitions']}
+            </div>
             <div id="sankey-chart"></div>
         </div>
 
@@ -536,34 +517,7 @@ class ReportGenerator:
             yaxis: {{ title: 'Liczba Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
-            height: 400,
-            shapes: [
-                {{
-                    type: 'line',
-                    x0: '{end_date}',
-                    x1: '{end_date}',
-                    y0: 0,
-                    y1: 1,
-                    yref: 'paper',
-                    line: {{
-                        color: 'rgba(128, 128, 128, 0.5)',
-                        width: 2,
-                        dash: 'dot'
-                    }}
-                }}
-            ],
-            annotations: [
-                {{
-                    x: '{end_date}',
-                    y: 1,
-                    yref: 'paper',
-                    text: 'Koniec zakresu',
-                    showarrow: false,
-                    xanchor: 'left',
-                    yanchor: 'bottom',
-                    font: {{ size: 10, color: 'gray' }}
-                }}
-            ]
+            height: 400
         }};
 
         Plotly.newPlot('timeline-chart', timelineData, timelineLayout, {{responsive: true}});
@@ -578,9 +532,9 @@ class ReportGenerator:
                 marker: {{ color: '#f59e0b' }}
             }},
             {{
-                x: {json.dumps(trend_dates)},
-                y: {json.dumps(trend_open)},
-                name: 'Trend (Projekcja)',
+                x: {json.dumps(dates)},
+                y: {json.dumps(open_trend)},
+                name: 'Trend',
                 type: 'scatter',
                 mode: 'lines',
                 line: {{ color: '#dc2626', width: 3, dash: 'dash' }}
@@ -592,34 +546,7 @@ class ReportGenerator:
             yaxis: {{ title: 'Liczba Otwartych Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
-            height: 400,
-            shapes: [
-                {{
-                    type: 'line',
-                    x0: '{end_date}',
-                    x1: '{end_date}',
-                    y0: 0,
-                    y1: 1,
-                    yref: 'paper',
-                    line: {{
-                        color: 'rgba(128, 128, 128, 0.5)',
-                        width: 2,
-                        dash: 'dot'
-                    }}
-                }}
-            ],
-            annotations: [
-                {{
-                    x: '{end_date}',
-                    y: 1,
-                    yref: 'paper',
-                    text: 'Koniec zakresu',
-                    showarrow: false,
-                    xanchor: 'left',
-                    yanchor: 'bottom',
-                    font: {{ size: 10, color: 'gray' }}
-                }}
-            ]
+            height: 400
         }};
 
         Plotly.newPlot('open-chart', openData, openLayout, {{responsive: true}});
