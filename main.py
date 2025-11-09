@@ -1,240 +1,347 @@
 #!/usr/bin/env python3
-"""Main CLI entry point for Jira Scraper & Analytics."""
+"""Simple Jira ticket fetcher with caching and parameterizable JQL."""
 
 import argparse
+import json
+import os
 import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
-from src.jira_scraper.scraper import JiraScraper
-from src.jira_scraper.analyzer import JiraAnalyzer
-from src.jira_scraper.report_generator import ReportGenerator
+from dotenv import load_dotenv
+from jira import JIRA
 
 
-def parse_arguments():
+class JiraFetcher:
+    """Simple Jira connector with caching."""
+
+    def __init__(self):
+        """Initialize Jira connection from environment variables."""
+        load_dotenv()
+
+        self.jira_url = os.getenv("JIRA_URL")
+        if not self.jira_url:
+            raise ValueError("JIRA_URL not found in environment variables")
+
+        # Auto-detect authentication method
+        jira_email = os.getenv("JIRA_EMAIL")
+        jira_token = os.getenv("JIRA_API_TOKEN")
+        jira_username = os.getenv("JIRA_USERNAME")
+        jira_password = os.getenv("JIRA_PASSWORD")
+
+        # Try Cloud authentication (email + token)
+        if jira_email and jira_token:
+            print(f"Connecting to Jira Cloud: {self.jira_url}")
+            self.jira = JIRA(
+                server=self.jira_url,
+                basic_auth=(jira_email, jira_token)
+            )
+        # Try On-Premise authentication (username + password)
+        elif jira_username and jira_password:
+            print(f"Connecting to Jira On-Premise: {self.jira_url}")
+            self.jira = JIRA(
+                server=self.jira_url,
+                basic_auth=(jira_username, jira_password)
+            )
+        else:
+            raise ValueError(
+                "Missing credentials. Set either:\n"
+                "  - JIRA_EMAIL and JIRA_API_TOKEN (for Cloud), or\n"
+                "  - JIRA_USERNAME and JIRA_PASSWORD (for On-Premise)"
+            )
+
+    def build_jql(
+        self,
+        project: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        label: Optional[str] = None,
+    ) -> str:
+        """
+        Build JQL query with optional date and label filters.
+
+        Args:
+            project: Jira project key (e.g., 'PROJ')
+            start_date: Optional start date in YYYY-MM-DD format
+            end_date: Optional end date in YYYY-MM-DD format
+            label: Optional label to filter by
+
+        Returns:
+            JQL query string
+        """
+        jql_parts = [f"project = {project}"]
+
+        if start_date:
+            jql_parts.append(f"created >= '{start_date}'")
+
+        if end_date:
+            jql_parts.append(f"created <= '{end_date}'")
+
+        if label:
+            jql_parts.append(f"labels = '{label}'")
+
+        jql = " AND ".join(jql_parts)
+        jql += " ORDER BY created ASC"
+
+        return jql
+
+    def fetch_issues(
+        self,
+        project: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        label: Optional[str] = None,
+        batch_size: int = 100,
+    ) -> list:
+        """
+        Fetch issues from Jira using JQL.
+
+        Args:
+            project: Jira project key
+            start_date: Optional start date in YYYY-MM-DD format
+            end_date: Optional end date in YYYY-MM-DD format
+            label: Optional label to filter by
+            batch_size: Number of issues to fetch per request
+
+        Returns:
+            List of issue dictionaries
+        """
+        jql = self.build_jql(project, start_date, end_date, label)
+        print(f"\nJQL Query: {jql}")
+
+        issues = []
+        start_at = 0
+
+        while True:
+            print(f"Fetching issues {start_at} to {start_at + batch_size}...")
+
+            batch = self.jira.search_issues(
+                jql,
+                startAt=start_at,
+                maxResults=batch_size,
+                expand='changelog',
+                fields='*all'
+            )
+
+            if not batch:
+                break
+
+            # Convert issues to dictionaries
+            for issue in batch:
+                issues.append(self._issue_to_dict(issue))
+
+            print(f"  Found {len(batch)} issues (total: {len(issues)})")
+
+            if len(batch) < batch_size:
+                break
+
+            start_at += batch_size
+
+        return issues
+
+    def _issue_to_dict(self, issue) -> dict:
+        """
+        Convert Jira issue object to dictionary.
+
+        Args:
+            issue: Jira issue object
+
+        Returns:
+            Dictionary with issue data
+        """
+        fields = issue.raw['fields']
+
+        # Extract changelog
+        changelog = []
+        if hasattr(issue, 'changelog'):
+            for history in issue.changelog.histories:
+                for item in history.items:
+                    if item.field == 'status':
+                        changelog.append({
+                            'created': history.created,
+                            'author': history.author.displayName if hasattr(history.author, 'displayName') else str(history.author),
+                            'from_string': item.fromString,
+                            'to_string': item.toString,
+                        })
+
+        return {
+            'key': issue.key,
+            'id': issue.id,
+            'summary': fields.get('summary', ''),
+            'status': fields.get('status', {}).get('name', ''),
+            'issue_type': fields.get('issuetype', {}).get('name', ''),
+            'priority': fields.get('priority', {}).get('name', '') if fields.get('priority') else '',
+            'assignee': fields.get('assignee', {}).get('displayName', '') if fields.get('assignee') else '',
+            'reporter': fields.get('reporter', {}).get('displayName', '') if fields.get('reporter') else '',
+            'created': fields.get('created', ''),
+            'updated': fields.get('updated', ''),
+            'resolved': fields.get('resolutiondate', ''),
+            'labels': fields.get('labels', []),
+            'components': [c['name'] for c in fields.get('components', [])],
+            'description': fields.get('description', ''),
+            'changelog': changelog,
+        }
+
+
+def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Jira Scraper & Analytics - Generate comprehensive reports from Jira data",
+        description='Fetch Jira issues and cache them to jira_cached.json',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --granularity weekly
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --output custom_report.html
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --label Sprint-1 --test-label Release-2.0
-  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-10-23 --force-fetch
+  # Fetch all issues from project PROJ
+  %(prog)s --project PROJ
 
-Note:
-  - All tickets are fetched from Jira regardless of date (for efficient caching)
-  - Date filtering is applied during analysis phase
-  - Bugs are filtered by issue type (Bug or "Błąd w programie"), not by date
-  - Data is cached by default in .jira_cache/ directory
-  - Use --force-fetch to refresh cache from API
+  # Fetch with date range
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-12-31
+
+  # Fetch with label
+  %(prog)s --project PROJ --label Sprint-1
+
+  # Fetch with all filters and force refresh
+  %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-12-31 --label Sprint-1 --force-fetch
         """
     )
 
     parser.add_argument(
-        "--project",
-        "-p",
+        '--project', '-p',
         required=True,
-        help="Jira project key (e.g., PROJ, DEMO)",
+        help='Jira project key (e.g., PROJ, DEMO)'
     )
 
     parser.add_argument(
-        "--start-date",
-        "-s",
-        required=True,
-        help="Start date for analysis in YYYY-MM-DD format (fetches all tickets, filters during analysis)",
+        '--start-date', '-s',
+        help='Start date in YYYY-MM-DD format (optional)'
     )
 
     parser.add_argument(
-        "--end-date",
-        "-e",
-        required=True,
-        help="End date for analysis in YYYY-MM-DD format (fetches all tickets, filters during analysis)",
+        '--end-date', '-e',
+        help='End date in YYYY-MM-DD format (optional)'
     )
 
     parser.add_argument(
-        "--granularity",
-        "-g",
-        choices=["daily", "weekly"],
-        default="daily",
-        help="Temporal trend granularity (default: daily)",
+        '--label', '-l',
+        help='Filter by label (optional)'
     )
 
     parser.add_argument(
-        "--output",
-        "-o",
-        default="jira_report.html",
-        help="Output HTML file path (default: jira_report.html)",
+        '--force-fetch', '-f',
+        action='store_true',
+        help='Force fetch from API, ignore cache'
     )
 
     parser.add_argument(
-        "--test-connection",
-        action="store_true",
-        help="Test Jira connection and exit",
-    )
-
-    parser.add_argument(
-        "--label",
-        "-l",
-        help="Filter all tickets by label in JQL queries (e.g., 'Sprint-1', 'Release-2.0')",
-    )
-
-    parser.add_argument(
-        "--test-label",
-        "-t",
-        help="Filter test executions by label (e.g., 'Sprint-1', 'Release-2.0'). If not specified, uses --label",
-    )
-
-    parser.add_argument(
-        "--batch-size",
-        "-b",
+        '--batch-size', '-b',
         type=int,
-        default=1000,
-        help="Number of tickets to fetch per request (default: 1000)",
+        default=100,
+        help='Number of issues to fetch per request (default: 100)'
     )
 
     parser.add_argument(
-        "--force-fetch",
-        "-f",
-        action="store_true",
-        help="Force fetching data from API, ignoring cache",
+        '--output', '-o',
+        default='jira_cached.json',
+        help='Output file path (default: jira_cached.json)'
     )
 
     return parser.parse_args()
 
 
 def validate_date(date_string: str) -> bool:
-    """
-    Validate date format.
-
-    Args:
-        date_string: Date string to validate
-
-    Returns:
-        True if valid, False otherwise
-    """
+    """Validate date format YYYY-MM-DD."""
     try:
-        datetime.strptime(date_string, "%Y-%m-%d")
+        datetime.strptime(date_string, '%Y-%m-%d')
         return True
     except ValueError:
         return False
 
 
 def main():
-    """Main execution function."""
-    args = parse_arguments()
+    """Main entry point."""
+    args = parse_args()
 
-    # Validate dates
-    if not validate_date(args.start_date):
+    # Validate dates if provided
+    if args.start_date and not validate_date(args.start_date):
         print(f"Error: Invalid start date format: {args.start_date}")
         print("Expected format: YYYY-MM-DD")
         sys.exit(1)
 
-    if not validate_date(args.end_date):
+    if args.end_date and not validate_date(args.end_date):
         print(f"Error: Invalid end date format: {args.end_date}")
         print("Expected format: YYYY-MM-DD")
         sys.exit(1)
 
-    # Validate date range
-    start = datetime.strptime(args.start_date, "%Y-%m-%d")
-    end = datetime.strptime(args.end_date, "%Y-%m-%d")
+    # Validate date range if both provided
+    if args.start_date and args.end_date:
+        start = datetime.strptime(args.start_date, '%Y-%m-%d')
+        end = datetime.strptime(args.end_date, '%Y-%m-%d')
+        if start > end:
+            print("Error: Start date must be before end date")
+            sys.exit(1)
 
-    if start > end:
-        print("Error: Start date must be before end date")
-        sys.exit(1)
+    output_path = Path(args.output)
 
+    # Check cache
+    if output_path.exists() and not args.force_fetch:
+        print(f"\nCache found at {output_path}")
+        print("Use --force-fetch to refresh from API")
+
+        with open(output_path, 'r', encoding='utf-8') as f:
+            cached_data = json.load(f)
+
+        print(f"\nCached data:")
+        print(f"  Issues: {len(cached_data['issues'])}")
+        print(f"  Fetched: {cached_data['metadata']['fetched_at']}")
+        print(f"  Project: {cached_data['metadata']['project']}")
+        if cached_data['metadata'].get('start_date'):
+            print(f"  Start date: {cached_data['metadata']['start_date']}")
+        if cached_data['metadata'].get('end_date'):
+            print(f"  End date: {cached_data['metadata']['end_date']}")
+        if cached_data['metadata'].get('label'):
+            print(f"  Label: {cached_data['metadata']['label']}")
+
+        return
+
+    # Fetch from API
     try:
-        # Initialize scraper
-        print("Initializing Jira connection...")
-        scraper = JiraScraper()
+        print("=" * 60)
+        print("JIRA ISSUE FETCHER")
+        print("=" * 60)
 
-        # Test connection if requested
-        if args.test_connection:
-            if scraper.test_connection():
-                print("Connection test successful!")
-                sys.exit(0)
-            else:
-                print("Connection test failed!")
-                sys.exit(1)
+        fetcher = JiraFetcher()
 
-        # Fetch project info
-        print(f"\nFetching project info for {args.project}...")
-        project_info = scraper.get_project_info(args.project)
-        print(f"Project: {project_info['name']}")
-        print(f"Lead: {project_info.get('lead', 'N/A')}")
-
-        # Fetch tickets (all tickets, date filtering happens during analysis)
-        if args.force_fetch:
-            print("\nForce fetch enabled - ignoring cache and fetching from API...")
-
-        if args.label:
-            print(f"\nFetching all tickets with label '{args.label}'...")
-        else:
-            print(f"\nFetching all tickets for project {args.project}...")
-
-        print(f"(Date filtering {args.start_date} to {args.end_date} will be applied during analysis)")
-
-        tickets = scraper.get_project_tickets(
-            project_key=args.project,
-            start_date=args.start_date,  # Kept for backwards compatibility, not used in query
-            end_date=args.end_date,      # Kept for backwards compatibility, not used in query
+        issues = fetcher.fetch_issues(
+            project=args.project,
+            start_date=args.start_date,
+            end_date=args.end_date,
             label=args.label,
             batch_size=args.batch_size,
-            force_fetch=args.force_fetch,
         )
 
-        if not tickets:
-            print("No tickets found for the specified criteria.")
-            sys.exit(0)
+        # Prepare output data
+        output_data = {
+            'metadata': {
+                'project': args.project,
+                'start_date': args.start_date,
+                'end_date': args.end_date,
+                'label': args.label,
+                'fetched_at': datetime.now().isoformat(),
+                'total_issues': len(issues),
+            },
+            'issues': issues,
+        }
 
-        # Analyze data
-        print(f"\nAnalyzing {len(tickets)} tickets...")
-        analyzer = JiraAnalyzer(tickets, jira_url=scraper.jira_url)
-        analyzer.build_dataframes()
+        # Save to file
+        print(f"\nSaving {len(issues)} issues to {output_path}...")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
 
-        print("Calculating metrics...")
-        summary_stats = analyzer.get_summary_statistics()
-        flow_metrics = analyzer.calculate_flow_metrics()
-        cycle_metrics = analyzer.calculate_cycle_metrics()
-        temporal_trends = analyzer.calculate_temporal_trends(
-            start_date=args.start_date,
-            end_date=args.end_date,
-            granularity=args.granularity,
-        )
-
-        # Generate report
-        print(f"\nGenerating HTML report...")
-        report_gen = ReportGenerator(
-            project_name=args.project,
-            start_date=args.start_date,
-            end_date=args.end_date,
-            jira_url=scraper.jira_url,
-        )
-
-        # Default test_label to label if not specified
-        test_label = args.test_label if args.test_label else args.label
-
-        output_path = report_gen.generate_html_report(
-            summary_stats=summary_stats,
-            flow_metrics=flow_metrics,
-            cycle_metrics=cycle_metrics,
-            temporal_trends=temporal_trends,
-            tickets=tickets,
-            test_label=test_label,
-            output_file=args.output,
-        )
-
-        # Summary
         print("\n" + "=" * 60)
-        print("ANALYSIS COMPLETE")
+        print("FETCH COMPLETE")
         print("=" * 60)
-        print(f"Total tickets analyzed: {summary_stats['total_tickets']}")
-        print(f"Resolved tickets: {summary_stats['resolved_tickets']}")
-        print(f"Average lead time: {cycle_metrics['avg_lead_time']:.2f} days")
-        print(f"Average cycle time: {cycle_metrics['avg_cycle_time']:.2f} days")
-        print(f"\nReport saved to: {output_path}")
+        print(f"Total issues: {len(issues)}")
+        print(f"Saved to: {output_path}")
         print("=" * 60)
 
     except KeyboardInterrupt:
@@ -247,5 +354,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

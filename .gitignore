@@ -208,3 +208,4 @@ __marimo__/
 
 # Jira scraper cache
 .jira_cache/
+jira_cached.json
