@@ -154,34 +154,47 @@ class ReportGenerator:
             # No date filters: show all dates up to today
             filtered_indices = [i for i, date in enumerate(all_dates) if date <= today]
 
-        dates = [all_dates[i] for i in filtered_indices]
+        dates_actual = [all_dates[i] for i in filtered_indices]
         created_counts = [all_created_counts[i] for i in filtered_indices]
         closed_counts = [all_closed_counts[i] for i in filtered_indices]
         open_counts = [all_open_counts[i] for i in filtered_indices]
 
-        # Calculate current open bugs count BEFORE extending with zeros
+        # Calculate current open bugs count
         current_open_bugs = 0
         if open_counts:
             current_open_bugs = open_counts[-1]  # Last value in actual data range
 
-        # Extend to end_date with zeros for trend projection
-        if end_date and end_date > today and dates:
+        # Calculate trends based on ACTUAL data only (no zeros)
+        created_trend = self._calculate_trend(dates_actual, created_counts) if created_counts else []
+        closed_trend = self._calculate_trend(dates_actual, closed_counts) if closed_counts else []
+        open_trend = self._calculate_trend(dates_actual, open_counts) if open_counts else []
+
+        # Create trend date array (starts same as actual dates)
+        dates_trend = list(dates_actual)
+
+        # Extend trend date array and trend lines to end_date for projection
+        if end_date and end_date > today and dates_actual:
             # Generate dates from last date + 1 to end_date
-            last_date_obj = datetime.strptime(dates[-1], '%Y-%m-%d')
+            last_date_obj = datetime.strptime(dates_actual[-1], '%Y-%m-%d')
             end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
 
-            current = last_date_obj + timedelta(days=1)
-            while current <= end_date_obj:
-                dates.append(current.strftime('%Y-%m-%d'))
-                created_counts.append(0)
-                closed_counts.append(0)
-                open_counts.append(0)
-                current += timedelta(days=1)
+            # Calculate number of future days
+            future_days = (end_date_obj - last_date_obj).days
 
-        # Calculate trends using extended data (includes future zeros for projection)
-        created_trend = self._calculate_trend(dates, created_counts) if created_counts else []
-        closed_trend = self._calculate_trend(dates, closed_counts) if closed_counts else []
-        open_trend = self._calculate_trend(dates, open_counts) if open_counts else []
+            if future_days > 0 and len(dates_actual) >= 2 and created_trend:
+                # Calculate slope from trend
+                created_slope = created_trend[-1] - created_trend[-2]
+                closed_slope = closed_trend[-1] - closed_trend[-2]
+                open_slope = open_trend[-1] - open_trend[-2]
+
+                # Extend dates and trends
+                current = last_date_obj + timedelta(days=1)
+                for i in range(1, future_days + 1):
+                    dates_trend.append(current.strftime('%Y-%m-%d'))
+                    created_trend.append(created_trend[-1] + created_slope)
+                    closed_trend.append(closed_trend[-1] + closed_slope)
+                    open_trend.append(open_trend[-1] + open_slope)
+                    current += timedelta(days=1)
 
         # Prepare end_date marker for graphs
         end_date_marker = ""
@@ -529,7 +542,7 @@ class ReportGenerator:
         // Utworzone vs Zamknięte Timeline
         const timelineData = [
             {{
-                x: {json.dumps(dates)},
+                x: {json.dumps(dates_actual)},
                 y: {json.dumps(created_counts)},
                 name: 'Utworzone',
                 type: 'scatter',
@@ -538,7 +551,7 @@ class ReportGenerator:
                 marker: {{ size: 6 }}
             }},
             {{
-                x: {json.dumps(dates)},
+                x: {json.dumps(dates_trend)},
                 y: {json.dumps(created_trend)},
                 name: 'Trend Utworzonych',
                 type: 'scatter',
@@ -547,7 +560,7 @@ class ReportGenerator:
                 opacity: 0.6
             }},
             {{
-                x: {json.dumps(dates)},
+                x: {json.dumps(dates_actual)},
                 y: {json.dumps(closed_counts)},
                 name: 'Zamknięte',
                 type: 'scatter',
@@ -556,7 +569,7 @@ class ReportGenerator:
                 marker: {{ size: 6 }}
             }},
             {{
-                x: {json.dumps(dates)},
+                x: {json.dumps(dates_trend)},
                 y: {json.dumps(closed_trend)},
                 name: 'Trend Zamkniętych',
                 type: 'scatter',
@@ -579,14 +592,14 @@ class ReportGenerator:
         // Otwarte Błędy Timeline - wykres słupkowy
         const openData = [
             {{
-                x: {json.dumps(dates)},
+                x: {json.dumps(dates_actual)},
                 y: {json.dumps(open_counts)},
                 name: 'Otwarte Błędy',
                 type: 'bar',
                 marker: {{ color: '#f59e0b' }}
             }},
             {{
-                x: {json.dumps(dates)},
+                x: {json.dumps(dates_trend)},
                 y: {json.dumps(open_trend)},
                 name: 'Trend',
                 type: 'scatter',
