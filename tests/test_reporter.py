@@ -134,10 +134,8 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for stat cards (Polish) - loop stats removed in recent refactoring
-        assert 'Łącznie Błędów' in content or 'Total Bugs' in content
-        assert 'Łącznie Przejść' in content or 'Total Transitions' in content
-        assert 'Unikalnych Statusów' in content or 'Unique Statuses' in content
+        # Check for stat cards (Polish) - simplified to only open bugs
+        assert 'Obecnie Otwarte Błędy' in content or 'Currently Open Bugs' in content
 
     def test_generate_html_includes_charts(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that chart containers are included."""
@@ -198,8 +196,8 @@ class TestReportGenerator:
         assert 'Wzorce Przeróbek' not in content
         assert 'Wzorzec Pętli' not in content
 
-    def test_generate_html_with_color_coded_flows(self, sample_metadata, flow_metrics, temp_output_dir):
-        """Test that flows are color-coded in Sankey diagram."""
+    def test_generate_html_all_flows_gray(self, sample_metadata, flow_metrics, temp_output_dir):
+        """Test that all flows are gray in Sankey diagram."""
         generator = ReportGenerator(sample_metadata, flow_metrics)
 
         output_path = temp_output_dir / 'test_report.html'
@@ -208,11 +206,11 @@ class TestReportGenerator:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for color coding:
-        # Gray for loops, green for correct flows, red for incorrect flows
-        assert 'rgba(128, 128, 128, 0.4)' in content  # Gray for loops
-        assert 'rgba(34, 197, 94, 0.4)' in content  # Green for correct
-        assert 'rgba(220, 38, 38, 0.4)' in content  # Red for incorrect
+        # Check that all flows are gray (no color coding)
+        assert 'rgba(128, 128, 128, 0.4)' in content  # All flows gray
+        # Verify no green or red colors
+        assert 'rgba(34, 197, 94, 0.4)' not in content  # No green
+        assert 'rgba(220, 38, 38, 0.4)' not in content  # No red
 
     def test_generate_html_styling(self, sample_metadata, flow_metrics, temp_output_dir):
         """Test that CSS styling is included."""

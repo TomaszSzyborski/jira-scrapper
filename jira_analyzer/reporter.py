@@ -132,9 +132,9 @@ class ReportGenerator:
         from datetime import datetime
         today = datetime.now().strftime('%Y-%m-%d')
 
-        # Use metadata dates for filtering display data
-        start_date = self.metadata.get('start_date', '')
-        end_date = self.metadata.get('end_date', today)
+        # Use metadata dates for filtering display data (handle None and empty strings)
+        start_date = self.metadata.get('start_date') or None
+        end_date = self.metadata.get('end_date') or None
 
         # Prepare all data for trend calculation (including future)
         all_dates = [d['date'] for d in timeline_data]
@@ -143,12 +143,13 @@ class ReportGenerator:
         all_open_counts = [d['open'] for d in timeline_data]
 
         # Filter data to show only PASSED dates (no future dates)
-        if start_date and end_date:
+        if start_date or end_date:
             # Use parameter range, but limit to today
-            actual_end = min(end_date, today)
-            filtered_indices = [i for i, date in enumerate(all_dates) if start_date <= date <= actual_end]
+            actual_start = start_date if start_date else (all_dates[0] if all_dates else today)
+            actual_end = min(end_date if end_date else today, today)
+            filtered_indices = [i for i, date in enumerate(all_dates) if actual_start <= date <= actual_end]
         else:
-            # Fallback: show all dates up to today
+            # No date filters: show all dates up to today
             filtered_indices = [i for i, date in enumerate(all_dates) if date <= today]
 
         dates = [all_dates[i] for i in filtered_indices]
@@ -202,15 +203,20 @@ class ReportGenerator:
         if open_counts:
             current_open_bugs = open_counts[-1]  # Last value in filtered range
 
+        # Calculate actual date range for drilldowns (same as for graphs)
+        if start_date or end_date:
+            actual_start = start_date if start_date else (all_dates[0] if all_dates else today)
+            actual_end = min(end_date if end_date else today, today)
+        else:
+            # No date filters: show all dates up to today
+            actual_start = all_dates[0] if all_dates else today
+            actual_end = today
+
         # Drilldown sections for open bugs - filter to parameter date range
         drilldown_sections = ""
         for day in timeline_data:
             # Filter drilldowns to show only dates within parameter range
-            if start_date and end_date:
-                actual_end = min(end_date, today)
-                if not (start_date <= day['date'] <= actual_end):
-                    continue
-            elif day['date'] > today:
+            if not (actual_start <= day['date'] <= actual_end):
                 continue
 
             if day['open'] > 0:
@@ -484,8 +490,8 @@ class ReportGenerator:
                 marker: {{ size: 6 }}
             }},
             {{
-                x: {json.dumps(trend_dates)},
-                y: {json.dumps(trend_created)},
+                x: {json.dumps(dates)},
+                y: {json.dumps(created_trend)},
                 name: 'Trend Utworzonych',
                 type: 'scatter',
                 mode: 'lines',
@@ -502,8 +508,8 @@ class ReportGenerator:
                 marker: {{ size: 6 }}
             }},
             {{
-                x: {json.dumps(trend_dates)},
-                y: {json.dumps(trend_closed)},
+                x: {json.dumps(dates)},
+                y: {json.dumps(closed_trend)},
                 name: 'Trend Zamkniętych',
                 type: 'scatter',
                 mode: 'lines',
