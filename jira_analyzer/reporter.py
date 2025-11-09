@@ -131,7 +131,7 @@ class ReportGenerator:
         timeline_data = timeline.get('daily_data', [])
 
         # Get date range from parameters (not from cached metadata)
-        from datetime import datetime
+        from datetime import datetime, timedelta
         today = datetime.now().strftime('%Y-%m-%d')
 
         # Use passed dates for filtering display data (handle None and empty strings)
@@ -146,7 +146,7 @@ class ReportGenerator:
 
         # Filter data to show only PASSED dates (no future dates)
         if start_date or end_date:
-            # Use parameter range, but limit to today
+            # Use parameter range, but limit to today for actual data
             actual_start = start_date if start_date else (all_dates[0] if all_dates else today)
             actual_end = min(end_date if end_date else today, today)
             filtered_indices = [i for i, date in enumerate(all_dates) if actual_start <= date <= actual_end]
@@ -159,10 +159,56 @@ class ReportGenerator:
         closed_counts = [all_closed_counts[i] for i in filtered_indices]
         open_counts = [all_open_counts[i] for i in filtered_indices]
 
-        # Calculate trends using ONLY passed dates (no future projection)
+        # Extend to end_date with zeros for trend projection
+        if end_date and end_date > today and dates:
+            # Generate dates from last date + 1 to end_date
+            last_date_obj = datetime.strptime(dates[-1], '%Y-%m-%d')
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+
+            current = last_date_obj + timedelta(days=1)
+            while current <= end_date_obj:
+                dates.append(current.strftime('%Y-%m-%d'))
+                created_counts.append(0)
+                closed_counts.append(0)
+                open_counts.append(0)
+                current += timedelta(days=1)
+
+        # Calculate trends using extended data (includes future zeros for projection)
         created_trend = self._calculate_trend(dates, created_counts) if created_counts else []
         closed_trend = self._calculate_trend(dates, closed_counts) if closed_counts else []
         open_trend = self._calculate_trend(dates, open_counts) if open_counts else []
+
+        # Prepare end_date marker for graphs
+        end_date_marker = ""
+        if end_date and end_date > today:
+            end_date_marker = f""",
+            shapes: [
+                {{
+                    type: 'line',
+                    x0: '{end_date}',
+                    x1: '{end_date}',
+                    y0: 0,
+                    y1: 1,
+                    yref: 'paper',
+                    line: {{
+                        color: 'rgba(220, 38, 38, 0.5)',
+                        width: 2,
+                        dash: 'dot'
+                    }}
+                }}
+            ],
+            annotations: [
+                {{
+                    x: '{end_date}',
+                    y: 1,
+                    yref: 'paper',
+                    text: 'Koniec zakresu',
+                    showarrow: false,
+                    xanchor: 'left',
+                    yanchor: 'bottom',
+                    font: {{ size: 10, color: '#dc2626' }}
+                }}
+            ]"""
 
         # Sankey diagram data
         node_labels = all_statuses
@@ -525,7 +571,7 @@ class ReportGenerator:
             yaxis: {{ title: 'Liczba Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
-            height: 400
+            height: 400{end_date_marker}
         }};
 
         Plotly.newPlot('timeline-chart', timelineData, timelineLayout, {{responsive: true}});
@@ -554,7 +600,7 @@ class ReportGenerator:
             yaxis: {{ title: 'Liczba Otwartych Błędów' }},
             hovermode: 'x unified',
             showlegend: true,
-            height: 400
+            height: 400{end_date_marker}
         }};
 
         Plotly.newPlot('open-chart', openData, openLayout, {{responsive: true}});
