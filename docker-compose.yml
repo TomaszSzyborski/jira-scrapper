@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  jira-analyzer:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/cache:/app/data/cache
+      - ./data/reports:/app/data/reports
+    environment:
+      # These will be overridden by secrets if using Docker Swarm
+      - JIRA_URL=${JIRA_URL}
+      - JIRA_EMAIL=${JIRA_EMAIL}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN}
+      - JIRA_USERNAME=${JIRA_USERNAME}
+      - JIRA_PASSWORD=${JIRA_PASSWORD}
+    secrets:
+      - jira_url
+      - jira_email
+      - jira_api_token
+      - jira_username
+      - jira_password
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+secrets:
+  jira_url:
+    file: ./secrets/jira_url.txt
+  jira_email:
+    file: ./secrets/jira_email.txt
+  jira_api_token:
+    file: ./secrets/jira_api_token.txt
+  jira_username:
+    file: ./secrets/jira_username.txt
+  jira_password:
+    file: ./secrets/jira_password.txt

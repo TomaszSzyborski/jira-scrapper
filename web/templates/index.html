@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Flow Analyzer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #3b82f6 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            color: #1e3a8a;
+        }
+
+        .card h2 {
+            color: #1e3a8a;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #1e40af;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #1e40af;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(30, 58, 138, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .status-message.info {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            color: #1e40af;
+        }
+
+        .status-message.success {
+            background: #dcfce7;
+            border-left: 4px solid #22c55e;
+            color: #166534;
+        }
+
+        .status-message.error {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #991b1b;
+        }
+
+        .reports-list {
+            list-style: none;
+        }
+
+        .report-item {
+            background: #f0f9ff;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .report-item .report-info {
+            flex: 1;
+        }
+
+        .report-item .report-name {
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 5px;
+        }
+
+        .report-item .report-meta {
+            font-size: 0.9em;
+            color: #64748b;
+        }
+
+        .report-item .report-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9em;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+
+        .btn-small:hover {
+            background: #1e40af;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .info-box {
+            background: #eff6ff;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #60a5fa;
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #475569;
+            line-height: 1.6;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 4px;
+            font-size: 0.85em;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Jira Flow Analyzer</h1>
+            <p class="subtitle">Generate comprehensive flow analysis reports for your Jira projects</p>
+        </div>
+
+        <div class="card">
+            <h2>Generate New Report</h2>
+
+            <div class="info-box">
+                <h3>📊 Report Types</h3>
+                <p>Generate flow analysis reports for different issue types:</p>
+                <p>
+                    <span class="tag">Bug Reports</span>
+                    <span class="tag">Story Reports</span>
+                    <span class="tag">Task Reports</span>
+                    <span class="tag">Custom Types</span>
+                </p>
+            </div>
+
+            <form id="reportForm">
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="project">Project Key *</label>
+                        <input type="text" id="project" name="project" required placeholder="e.g., PROJ, DEMO">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="issueTypes">Issue Types (comma-separated)</label>
+                        <input type="text" id="issueTypes" name="issueTypes" placeholder="e.g., Bug, Story, Task">
+                        <small style="color: #64748b;">Leave empty for Bug reports (default)</small>
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="startDate">Start Date</label>
+                        <input type="date" id="startDate" name="startDate">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="endDate">End Date</label>
+                        <input type="date" id="endDate" name="endDate">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="label">Label (optional)</label>
+                    <input type="text" id="label" name="label" placeholder="e.g., Sprint-1, Q1-2024">
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="forceFetch" name="forceFetch">
+                        <label for="forceFetch" style="margin: 0;">Force fetch from Jira (ignore cache)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn" id="generateBtn">
+                    Generate Report
+                </button>
+
+                <div class="status-message" id="statusMessage"></div>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Available Reports</h2>
+            <button class="btn-small" onclick="loadReports()">🔄 Refresh List</button>
+            <div id="reportsList" style="margin-top: 20px;">
+                <p style="color: #64748b;">Loading reports...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // Load reports on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadReports();
+        });
+
+        // Handle form submission
+        document.getElementById('reportForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const btn = document.getElementById('generateBtn');
+            const statusMsg = document.getElementById('statusMessage');
+
+            // Disable button
+            btn.disabled = true;
+            btn.innerHTML = 'Generating... <span class="loading-spinner"></span>';
+
+            // Get form data
+            const formData = {
+                project: document.getElementById('project').value,
+                start_date: document.getElementById('startDate').value || null,
+                end_date: document.getElementById('endDate').value || null,
+                label: document.getElementById('label').value || null,
+                issue_types: document.getElementById('issueTypes').value
+                    ? document.getElementById('issueTypes').value.split(',').map(s => s.trim())
+                    : null,
+                force_fetch: document.getElementById('forceFetch').checked
+            };
+
+            try {
+                // Generate report
+                const response = await fetch(`${API_BASE}/reports/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate report');
+                }
+
+                const result = await response.json();
+
+                // Show status message
+                showStatus('info', 'Report generation started. Polling for status...');
+
+                // Poll for status
+                pollReportStatus(result.report_id);
+
+            } catch (error) {
+                showStatus('error', `Error: ${error.message}`);
+                btn.disabled = false;
+                btn.innerHTML = 'Generate Report';
+            }
+        });
+
+        async function pollReportStatus(reportId) {
+            const btn = document.getElementById('generateBtn');
+            const maxAttempts = 60; // 5 minutes max
+            let attempts = 0;
+
+            const interval = setInterval(async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch(`${API_BASE}/reports/status/${reportId}`);
+                    const status = await response.json();
+
+                    showStatus('info', `${status.message}...`);
+
+                    if (status.status === 'completed') {
+                        clearInterval(interval);
+                        showStatus('success', `Report generated successfully! <a href="${status.report_url}" target="_blank" style="color: #166534; text-decoration: underline;">View Report</a>`);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Report';
+                        loadReports();
+                    } else if (status.status === 'failed') {
+                        clearInterval(interval);
+                        showStatus('error', status.message);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Report';
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        showStatus('error', 'Timeout waiting for report generation');
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Report';
+                    }
+                } catch (error) {
+                    clearInterval(interval);
+                    showStatus('error', `Error polling status: ${error.message}`);
+                    btn.disabled = false;
+                    btn.innerHTML = 'Generate Report';
+                }
+            }, 5000); // Poll every 5 seconds
+        }
+
+        async function loadReports() {
+            const reportsList = document.getElementById('reportsList');
+            reportsList.innerHTML = '<p style="color: #64748b;">Loading reports...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE}/reports/list`);
+                const data = await response.json();
+
+                if (data.reports.length === 0) {
+                    reportsList.innerHTML = '<p style="color: #64748b;">No reports available. Generate your first report above!</p>';
+                    return;
+                }
+
+                const reportsHtml = data.reports.map(report => {
+                    const created = new Date(report.created).toLocaleString();
+                    const sizeMB = (report.size / 1024 / 1024).toFixed(2);
+
+                    return `
+                        <div class="report-item">
+                            <div class="report-info">
+                                <div class="report-name">${report.filename}</div>
+                                <div class="report-meta">Created: ${created} | Size: ${sizeMB} MB</div>
+                            </div>
+                            <div class="report-actions">
+                                <a href="${report.url}" target="_blank" class="btn-small">📊 View</a>
+                                <a href="${report.url}" download class="btn-small">💾 Download</a>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                reportsList.innerHTML = `<ul class="reports-list">${reportsHtml}</ul>`;
+
+            } catch (error) {
+                reportsList.innerHTML = `<p style="color: #ef4444;">Error loading reports: ${error.message}</p>`;
+            }
+        }
+
+        function showStatus(type, message) {
+            const statusMsg = document.getElementById('statusMessage');
+            statusMsg.className = `status-message ${type}`;
+            statusMsg.innerHTML = message;
+            statusMsg.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
