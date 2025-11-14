@@ -49,29 +49,34 @@ def parse_args():
         --report-output: HTML report output file (default: jira_flow_report.html)
     """
     parser = argparse.ArgumentParser(
-        description='Fetch Jira bugs, analyze flows with rework detection, and generate comprehensive reports',
+        description='Fetch Jira issues, analyze flows with rework detection, and generate comprehensive reports',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Fetch all bugs from project PROJ
+  # Fetch all bugs from project PROJ (default)
   %(prog)s --project PROJ
 
-  # Fetch bugs and analyze with date range (filtering done in Python)
+  # Fetch stories and generate flow report
+  %(prog)s --project PROJ --issue-types Story --report
+
+  # Fetch multiple issue types
+  %(prog)s --project PROJ --issue-types Bug Story Task --report
+
+  # Fetch issues and analyze with date range (filtering done in Python)
   %(prog)s --project PROJ --start-date 2024-01-01 --end-date 2024-12-31 --report
 
-  # Fetch bugs with label
+  # Fetch issues with label
   %(prog)s --project PROJ --label Sprint-1
 
-  # Fetch bugs and generate comprehensive flow report
-  %(prog)s --project PROJ --force-fetch --report
-
-  # Generate report from cached bugs with date filtering
+  # Generate report from cached issues with date filtering
   %(prog)s --project PROJ --start-date 2024-06-01 --end-date 2024-12-31 --report
 
 Note:
-  - Only bugs (type: Bug, "Błąd w programie") are fetched from Jira
+  - By default, only bugs (type: Bug, "Błąd w programie") are fetched
+  - Use --issue-types to fetch other issue types (Story, Task, etc.)
   - Date filtering is applied during analysis in Python, not in JQL
   - Reports include: timeline trends, loop detection, time in status, flow diagrams
+  - Report filenames are based on issue types (e.g., story_flow_report.html)
         """
     )
 
@@ -94,6 +99,12 @@ Note:
     parser.add_argument(
         '--label', '-l',
         help='Filter by label (optional)'
+    )
+
+    parser.add_argument(
+        '--issue-types', '-t',
+        nargs='+',
+        help='Issue types to fetch (e.g., Bug Story Task). Default: Bug'
     )
 
     parser.add_argument(
@@ -167,6 +178,21 @@ def main():
         1: Error (invalid arguments, API error, etc.)
     """
     args = parse_args()
+
+    # Set default issue types if not provided
+    if not args.issue_types:
+        args.issue_types = ['Bug', 'Błąd w programie']
+        issue_type_label = 'bug'
+    else:
+        # Create label from issue types for file naming
+        issue_type_label = '_'.join([t.lower().replace(' ', '_') for t in args.issue_types])
+
+    # Update default filenames based on issue type
+    if args.output == 'jira_cached.json':
+        args.output = f'jira_{issue_type_label}_cached.json'
+
+    if args.report_output == 'jira_flow_report.html':
+        args.report_output = f'{issue_type_label}_flow_report.html'
 
     # Validate dates if provided
     if args.start_date and not validate_date(args.start_date):
@@ -252,9 +278,9 @@ def main():
     # Fetch from API
     try:
         print("=" * 60)
-        print("JIRA BUG FETCHER")
+        print("JIRA ISSUE FETCHER")
         print("=" * 60)
-        print("Fetching only bugs (type: Bug, \"Błąd w programie\")")
+        print(f"Fetching issue types: {', '.join(args.issue_types)}")
         if args.start_date or args.end_date:
             print(f"Date filtering will be applied during analysis:"
                   f" {args.start_date or 'any'} to {args.end_date or 'any'}")
@@ -266,6 +292,7 @@ def main():
             start_date=args.start_date,
             end_date=args.end_date,
             batch_size=args.batch_size,
+            issue_types=args.issue_types,
         )
 
         # Prepare output data
@@ -275,6 +302,7 @@ def main():
                 'start_date': args.start_date,
                 'end_date': args.end_date,
                 'label': args.label,
+                'issue_types': args.issue_types,
                 'fetched_at': datetime.now().isoformat(),
                 'total_issues': len(issues),
             },

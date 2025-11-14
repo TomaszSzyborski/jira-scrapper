@@ -84,29 +84,38 @@ class JiraFetcher:
         project: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        issue_types: Optional[list] = None,
     ) -> str:
         """
-        Build JQL query to fetch bugs only.
+        Build JQL query to fetch issues.
 
         Note: Date and label filtering is done in Python analysis, not in JQL, to allow
-        fetching all bugs once and analyzing different time periods and label subsets.
+        fetching all issues once and analyzing different time periods and label subsets.
 
         Args:
             project: Jira project key (e.g., 'PROJ')
             start_date: Not used in JQL (kept for backwards compatibility)
             end_date: Not used in JQL (kept for backwards compatibility)
+            issue_types: List of issue types to fetch (e.g., ['Bug', 'Story', 'Task'])
+                        If None, defaults to bugs only for backwards compatibility
 
         Returns:
-            JQL query string that fetches only bugs
+            JQL query string that fetches specified issue types
 
         Example:
             >>> fetcher = JiraFetcher()
-            >>> jql = fetcher.build_jql('PROJ')
+            >>> jql = fetcher.build_jql('PROJ', issue_types=['Bug', 'Story'])
             >>> print(jql)
-            'project = "PROJ" AND type in (Bug, "Błąd w programie") ORDER BY created ASC'
+            'project = "PROJ" AND type in (Bug, Story) ORDER BY created ASC'
         """
-        # Fetch ALL bugs - date and label filtering happens in Python
-        jql_parts = [f'project = "{project}"', 'type in (Bug, "Błąd w programie")']
+        # Default to bugs if no issue types specified
+        if issue_types is None:
+            issue_types = ['Bug', 'Błąd w programie']
+
+        # Format issue types for JQL
+        formatted_types = ', '.join([f'"{t}"' if ' ' in t else t for t in issue_types])
+
+        jql_parts = [f'project = "{project}"', f'type in ({formatted_types})']
 
         jql = " AND ".join(jql_parts)
         jql += " ORDER BY created ASC"
@@ -119,11 +128,12 @@ class JiraFetcher:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         batch_size: int = 100,
+        issue_types: Optional[list] = None,
     ) -> list:
         """
         Fetch issues from Jira using JQL.
 
-        Retrieves all bugs with full changelog information.
+        Retrieves all issues with full changelog information.
         Results are fetched in batches to handle large datasets efficiently.
 
         Note: Date and label filtering is done in Python analysis, not here.
@@ -133,16 +143,18 @@ class JiraFetcher:
             start_date: Optional start date (not used in JQL, for compatibility)
             end_date: Optional end date (not used in JQL, for compatibility)
             batch_size: Number of issues to fetch per request (default: 100)
+            issue_types: List of issue types to fetch (e.g., ['Bug', 'Story', 'Task'])
+                        If None, defaults to bugs only
 
         Returns:
             List of issue dictionaries with changelog data
 
         Example:
             >>> fetcher = JiraFetcher()
-            >>> issues = fetcher.fetch_issues('PROJ', batch_size=50)
-            >>> print(f"Fetched {len(issues)} bugs")
+            >>> issues = fetcher.fetch_issues('PROJ', issue_types=['Story'], batch_size=50)
+            >>> print(f"Fetched {len(issues)} stories")
         """
-        jql = self.build_jql(project, start_date, end_date)
+        jql = self.build_jql(project, start_date, end_date, issue_types)
         print(f"\nJQL Query: {jql}")
 
         issues = []
