@@ -159,9 +159,24 @@ See [DOCKER_SETUP.md](../DOCKER_SETUP.md) for detailed instructions.
 ### Running in Development Mode
 
 ```bash
-# With auto-reload
+# Development with auto-reload (single worker)
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
+
+### Running in Production Mode
+
+```bash
+# Production with Gunicorn + Uvicorn workers
+gunicorn app:app -c gunicorn.conf.py
+
+# Or with custom worker count
+gunicorn app:app -c gunicorn.conf.py -w 8
+
+# Or override with environment variable
+GUNICORN_WORKERS=8 gunicorn app:app -c gunicorn.conf.py
+```
+
+See [DEPLOYMENT.md](../DEPLOYMENT.md) for production deployment guide.
 
 ### Testing the API
 

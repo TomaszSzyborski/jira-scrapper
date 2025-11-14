@@ -2,6 +2,8 @@
 
 This guide explains how to run the Jira Flow Analyzer as a Dockerized web service with secure secret management.
 
+> **Note**: For production deployments with performance optimization, see [DEPLOYMENT.md](DEPLOYMENT.md)
+
 ## 🚀 Quick Start
 
 ### Option 1: Using Environment Variables (.env file)
@@ -152,13 +154,38 @@ docker stack rm jira-analyzer
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `JIRA_URL` | Jira instance URL | Yes |
-| `JIRA_EMAIL` | Email for Cloud authentication | Cloud only |
-| `JIRA_API_TOKEN` | API token for Cloud | Cloud only |
-| `JIRA_USERNAME` | Username for On-Premise | On-Premise only |
-| `JIRA_PASSWORD` | Password for On-Premise | On-Premise only |
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `JIRA_URL` | Jira instance URL | Yes | - |
+| `JIRA_EMAIL` | Email for Cloud authentication | Cloud only | - |
+| `JIRA_API_TOKEN` | API token for Cloud | Cloud only | - |
+| `JIRA_USERNAME` | Username for On-Premise | On-Premise only | - |
+| `JIRA_PASSWORD` | Password for On-Premise | On-Premise only | - |
+| `GUNICORN_WORKERS` | Number of worker processes | No | `(CPU * 2) + 1` |
+| `LOG_LEVEL` | Logging level | No | `info` |
+
+### Performance Tuning
+
+The service uses **Gunicorn with Uvicorn workers** for optimal performance:
+
+- **Gunicorn**: Process management and load balancing
+- **Uvicorn Workers**: High-performance async support for FastAPI
+- **Auto-scaling**: Workers automatically calculated based on CPU cores
+
+#### Setting Worker Count
+
+```bash
+# Auto (default): (CPU_cores * 2) + 1
+docker-compose up -d
+
+# Manual: Specify exact number
+GUNICORN_WORKERS=8 docker-compose up -d
+
+# Or in .env file
+echo "GUNICORN_WORKERS=8" >> .env
+```
+
+For detailed performance tuning and production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ### Docker Secrets (Swarm Mode)
 

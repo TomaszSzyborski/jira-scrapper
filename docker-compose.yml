@@ -9,12 +9,15 @@ services:
       - ./data/cache:/app/data/cache
       - ./data/reports:/app/data/reports
     environment:
-      # These will be overridden by secrets if using Docker Swarm
+      # Jira credentials - overridden by secrets if using Docker Swarm
       - JIRA_URL=${JIRA_URL}
       - JIRA_EMAIL=${JIRA_EMAIL}
       - JIRA_API_TOKEN=${JIRA_API_TOKEN}
       - JIRA_USERNAME=${JIRA_USERNAME}
       - JIRA_PASSWORD=${JIRA_PASSWORD}
+      # Gunicorn configuration
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-4}  # Default: 4 workers
+      - LOG_LEVEL=${LOG_LEVEL:-info}  # Default: info
     secrets:
       - jira_url
       - jira_email
@@ -28,6 +31,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # Optional: CPU and memory limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2.0'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '1.0'
+    #       memory: 512M
 
 secrets:
   jira_url:
