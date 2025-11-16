@@ -248,13 +248,26 @@ def main():
             )
             flow_metrics = analyzer.calculate_flow_metrics()
 
-            print(f"\nFlow Analysis:")
+            print(f"\nFlow Analysis (with label filter):")
             print(f"  Total bugs analyzed: {flow_metrics.get('total_issues', 0)}")
             print(f"  Total transitions: {flow_metrics['total_transitions']}")
             print(f"  Unique statuses: {flow_metrics['unique_statuses']}")
             print(f"  Flow patterns: {len(flow_metrics['flow_patterns'])}")
             print(f"  Rework loops detected: {flow_metrics.get('loops', {}).get('total_loops', 0)}")
             print(f"  Bugs with loops: {len(flow_metrics.get('loops', {}).get('issues_with_loops', []))}")
+
+            # If label filter is active, also calculate metrics without label for comparison
+            flow_metrics_no_label = None
+            if args.label:
+                print(f"\nCalculating metrics without label filter for comparison...")
+                analyzer_no_label = FlowAnalyzer(
+                    cached_data['issues'],
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    label=None  # No label filter
+                )
+                flow_metrics_no_label = analyzer_no_label.calculate_flow_metrics()
+                print(f"  Total bugs (no label filter): {flow_metrics_no_label.get('total_issues', 0)}")
 
             # Create simplified metadata (only project and fetched_at from cache)
             report_metadata = {
@@ -266,7 +279,9 @@ def main():
                 flow_metrics,
                 start_date=args.start_date,
                 end_date=args.end_date,
-                jira_url=os.getenv('JIRA_URL')
+                jira_url=os.getenv('JIRA_URL'),
+                label=args.label,
+                flow_metrics_no_label=flow_metrics_no_label
             )
             report_path = generator.generate_html(args.report_output)
 
@@ -335,13 +350,26 @@ def main():
             )
             flow_metrics = analyzer.calculate_flow_metrics()
 
-            print(f"\nFlow Analysis:")
+            print(f"\nFlow Analysis (with label filter):")
             print(f"  Total bugs analyzed: {flow_metrics.get('total_issues', 0)}")
             print(f"  Total transitions: {flow_metrics['total_transitions']}")
             print(f"  Unique statuses: {flow_metrics['unique_statuses']}")
             print(f"  Flow patterns: {len(flow_metrics['flow_patterns'])}")
             print(f"  Rework loops detected: {flow_metrics.get('loops', {}).get('total_loops', 0)}")
             print(f"  Bugs with loops: {len(flow_metrics.get('loops', {}).get('issues_with_loops', []))}")
+
+            # If label filter is active, also calculate metrics without label for comparison
+            flow_metrics_no_label = None
+            if args.label:
+                print(f"\nCalculating metrics without label filter for comparison...")
+                analyzer_no_label = FlowAnalyzer(
+                    issues,
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    label=None  # No label filter
+                )
+                flow_metrics_no_label = analyzer_no_label.calculate_flow_metrics()
+                print(f"  Total bugs (no label filter): {flow_metrics_no_label.get('total_issues', 0)}")
 
             # Create simplified metadata (only project and fetched_at, not dates)
             report_metadata = {
@@ -353,7 +381,9 @@ def main():
                 flow_metrics,
                 start_date=args.start_date,
                 end_date=args.end_date,
-                jira_url=fetcher.jira_url
+                jira_url=fetcher.jira_url,
+                label=args.label,
+                flow_metrics_no_label=flow_metrics_no_label
             )
             report_path = generator.generate_html(args.report_output)
 

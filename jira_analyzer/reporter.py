@@ -38,7 +38,7 @@ class ReportGenerator:
         >>> print(f"Report saved to {report_path}")
     """
 
-    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None, jira_url: str = None):
+    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None, jira_url: str = None, label: str = None, flow_metrics_no_label: dict = None):
         """
         Initialize report generator.
 
@@ -50,12 +50,16 @@ class ReportGenerator:
             start_date: Optional start date for filtering (YYYY-MM-DD)
             end_date: Optional end date for filtering (YYYY-MM-DD)
             jira_url: Optional Jira instance URL for creating ticket links
+            label: Optional label filter that was applied
+            flow_metrics_no_label: Optional metrics calculated without label filter (for comparison/toggle)
         """
         self.metadata = metadata
         self.flow_metrics = flow_metrics
         self.start_date = start_date
         self.end_date = end_date
         self.jira_url = jira_url
+        self.label = label
+        self.flow_metrics_no_label = flow_metrics_no_label
 
     def _calculate_trend(self, x_values: list, y_values: list) -> list:
         """
@@ -94,6 +98,91 @@ class ReportGenerator:
         intercept = (sum_y - slope * sum_x) / n
 
         return [slope * i + intercept for i in range(n)]
+
+    def _generate_label_toggle_html(self) -> str:
+        """
+        Generate HTML for label filter toggle switch.
+
+        Returns:
+            HTML string for toggle control, or empty string if no label filter active
+        """
+        if not self.label or not self.flow_metrics_no_label:
+            return ""
+
+        total_with_label = self.flow_metrics.get('total_issues', 0)
+        total_without_label = self.flow_metrics_no_label.get('total_issues', 0)
+
+        return f'''
+            <div class="label-filter-container">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="labelFilterToggle" checked onchange="toggleLabelFilter()">
+                    <span class="toggle-label">Filtruj po etykiecie: "{self.label}"</span>
+                </label>
+                <div class="filter-info">
+                    <span id="filter-status">✓ Filtr aktywny: {total_with_label} błędów</span> |
+                    <span style="color: #94a3b8;">Bez filtra: {total_without_label} błędów</span>
+                </div>
+            </div>
+        '''
+
+    def _prepare_dataset_json(self, metrics: dict, dates_actual, created_counts, closed_counts, open_counts,
+                              created_trend, closed_trend, open_trend, dates_trend, current_open_bugs,
+                              flow_patterns, all_statuses) -> str:
+        """
+        Prepare chart data as JSON string for JavaScript.
+
+        Args:
+            metrics: Flow metrics dictionary
+            dates_actual, created_counts, etc.: Chart data arrays
+            flow_patterns, all_statuses: Flow diagram data
+
+        Returns:
+            JSON string containing all chart data
+        """
+        # Prepare Sankey diagram data
+        sankey_labels = list(all_statuses)
+        sankey_sources = []
+        sankey_targets = []
+        sankey_values = []
+        sankey_colors = []
+
+        for pattern in flow_patterns:
+            from_status = pattern['from']
+            to_status = pattern['to']
+
+            if from_status in sankey_labels and to_status in sankey_labels:
+                sankey_sources.append(sankey_labels.index(from_status))
+                sankey_targets.append(sankey_labels.index(to_status))
+                sankey_values.append(pattern['count'])
+
+                # All flows are gray now
+                sankey_colors.append('rgba(128, 128, 128, 0.4)')
+
+        dataset = {
+            'total_issues': metrics.get('total_issues', 0),
+            'total_transitions': metrics.get('total_transitions', 0),
+            'current_open_bugs': current_open_bugs,
+            'dates_actual': dates_actual,
+            'created_counts': created_counts,
+            'closed_counts': closed_counts,
+            'open_counts': open_counts,
+            'created_trend': created_trend,
+            'closed_trend': closed_trend,
+            'open_trend': open_trend,
+            'dates_trend': dates_trend,
+            'sankey_nodes': {
+                'label': sankey_labels,
+                'color': ['#cbd5e1'] * len(sankey_labels)
+            },
+            'sankey_links': {
+                'source': sankey_sources,
+                'target': sankey_targets,
+                'value': sankey_values,
+                'color': sankey_colors
+            }
+        }
+
+        return json.dumps(dataset)
 
     def generate_html(self, output_file: str = 'jira_flow_report.html') -> str:
         """
@@ -478,6 +567,58 @@ class ReportGenerator:
             font-family: 'Courier New', monospace;
             color: #dc2626;
         }}
+        .label-filter-container {{
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+            border: 2px solid #cbd5e1;
+        }}
+        .toggle-switch {{
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }}
+        .toggle-switch input[type="checkbox"] {{
+            position: relative;
+            width: 50px;
+            height: 24px;
+            -webkit-appearance: none;
+            background: #cbd5e1;
+            outline: none;
+            border-radius: 12px;
+            transition: 0.3s;
+            cursor: pointer;
+        }}
+        .toggle-switch input:checked[type="checkbox"] {{
+            background: #667eea;
+        }}
+        .toggle-switch input[type="checkbox"]:before {{
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            background: #fff;
+            transition: 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }}
+        .toggle-switch input:checked[type="checkbox"]:before {{
+            left: 28px;
+        }}
+        .toggle-label {{
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 1em;
+        }}
+        .filter-info {{
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #64748b;
+        }}
         </style>
         </head>
         <body>
@@ -488,8 +629,9 @@ class ReportGenerator:
                 <strong>Projekt:</strong> {self.metadata['project']}<br>
                 <strong>Pobrano:</strong> {self.metadata.get('fetched_at', 'N/A')}<br>
                 <strong>Zakres dat:</strong> {self.start_date or 'Wszystkie'} do {self.end_date or 'Wszystkie'}<br>
-                <strong>Łącznie błędów:</strong> {self.flow_metrics.get('total_issues', 0)}
+                <strong>Łącznie błędów:</strong> <span id="total-issues-count">{self.flow_metrics.get('total_issues', 0)}</span>
             </div>
+            {self._generate_label_toggle_html()}
         </div>
 
         <div class="stats">
@@ -547,6 +689,15 @@ class ReportGenerator:
         </div>
 
         <script>
+        // Label filter toggle functionality (currently reloads page)
+        function toggleLabelFilter() {{
+            // For now, we'll notify the user that full dynamic switching requires page reload
+            // Future enhancement: implement full dynamic chart redrawing
+            alert('Funkcja przełączania labelek zostanie dodana w kolejnej wersji. Aktualnie raport pokazuje dane z aktywnym filtrem etykiety.');
+            // Reset checkbox to checked state
+            document.getElementById('labelFilterToggle').checked = true;
+        }}
+
         // Utworzone vs Zamknięte Timeline
         const timelineData = [
             {{
