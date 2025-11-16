@@ -85,19 +85,18 @@ class JiraFetcher:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         issue_types: Optional[list] = None,
+        incremental: bool = False,
     ) -> str:
         """
         Build JQL query to fetch issues.
 
-        Note: Date and label filtering is done in Python analysis, not in JQL, to allow
-        fetching all issues once and analyzing different time periods and label subsets.
-
         Args:
             project: Jira project key (e.g., 'PROJ')
-            start_date: Not used in JQL (kept for backwards compatibility)
-            end_date: Not used in JQL (kept for backwards compatibility)
+            start_date: Start date for filtering (YYYY-MM-DD) - used for incremental sync
+            end_date: End date for filtering (YYYY-MM-DD)
             issue_types: List of issue types to fetch (e.g., ['Bug', 'Story', 'Task'])
                         If None, defaults to bugs only for backwards compatibility
+            incremental: If True, uses date filters in JQL for incremental fetching
 
         Returns:
             JQL query string that fetches specified issue types
@@ -107,6 +106,10 @@ class JiraFetcher:
             >>> jql = fetcher.build_jql('PROJ', issue_types=['Bug', 'Story'])
             >>> print(jql)
             'project = "PROJ" AND type in (Bug, Story) ORDER BY created ASC'
+
+            >>> jql = fetcher.build_jql('PROJ', start_date='2024-01-01', incremental=True)
+            >>> print(jql)
+            'project = "PROJ" AND type in (Bug) AND (created >= "2024-01-01" OR updated >= "2024-01-01") ORDER BY created ASC'
         """
         # Default to bugs if no issue types specified
         if issue_types is None:
@@ -116,6 +119,16 @@ class JiraFetcher:
         formatted_types = ', '.join([f'"{t}"' if ' ' in t else t for t in issue_types])
 
         jql_parts = [f'project = "{project}"', f'type in ({formatted_types})']
+
+        # Add date filters for incremental sync
+        if incremental and start_date:
+            # Fetch issues created OR updated since last sync
+            date_filter = f'(created >= "{start_date}" OR updated >= "{start_date}")'
+            jql_parts.append(date_filter)
+
+        if incremental and end_date:
+            # Optional end date filter
+            jql_parts.append(f'created <= "{end_date}"')
 
         jql = " AND ".join(jql_parts)
         jql += " ORDER BY created ASC"
@@ -129,6 +142,7 @@ class JiraFetcher:
         end_date: Optional[str] = None,
         batch_size: int = 100,
         issue_types: Optional[list] = None,
+        incremental: bool = False,
     ) -> list:
         """
         Fetch issues from Jira using JQL.

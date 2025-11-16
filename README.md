@@ -1,8 +1,10 @@
-# Jira Scraper & Analytics
+# Jira Scraper & Analytics + Bitbucket Commit Analyzer
 
-Narzędzie oparte na Pythonie do scrapowania danych projektów z Jira i generowania kompleksowych raportów HTML z interaktywnymi wizualizacjami i szczegółową analizą przepływu zadań.
+Zestaw narzędzi opartych na Pythonie do:
+- **Jira Analyzer**: Scrapowanie danych projektów z Jira i generowanie kompleksowych raportów HTML z interaktywnymi wizualizacjami i szczegółową analizą przepływu zadań
+- **Bitbucket Analyzer**: Analiza statystyk commitów i pull requestów z Bitbucket Server (On-Premise) dla zespołów deweloperskich
 
-## Funkcje
+## Funkcje Jira Analyzer
 
 - **Ekstrakcja Danych Projektu**: Scraping pełnej historii projektu z Jira według nazwy projektu
 - **Analiza Przepływu Zadań**: Śledzenie przejść między statusami z interaktywnymi drilldown'ami
@@ -378,6 +380,94 @@ pytest --cov=jira_scraper tests/
 # Uruchom konkretny plik testowy
 pytest tests/test_scraper.py
 ```
+
+---
+
+## 📊 Bitbucket Commit Analyzer
+
+Narzędzie do analizy statystyk commitów i pull requestów z Bitbucket Server (On-Premise).
+
+### Funkcje Bitbucket Analyzer
+
+- 📊 Analiza commitów dla wybranych użytkowników
+- 📈 Statystyki linii kodu: dodane, usunięte, zmienione (osobno)
+- 🏆 Rankingi Top 3 i Bottom 3 według:
+  - Liczby commitów
+  - Liczby zmian (linie kodu)
+  - Liczby pull requestów
+- 👥 Wsparcie dla aliasów użytkowników (grupowanie zespołowe)
+- 📅 Filtrowanie według zakresu dat
+- 💾 Cachowanie danych dla szybszego przetwarzania
+- 📄 Generowanie raportów HTML z kolorystycznymi wizualizacjami
+
+### Konfiguracja Bitbucket
+
+Dodaj do pliku `.env`:
+
+```env
+# Bitbucket Server (On-Premise)
+BITBUCKET_URL=http://bitbucket.your-company.com
+BITBUCKET_USERNAME=your_username
+BITBUCKET_PASSWORD=your_password_or_api_token
+```
+
+### Użycie Bitbucket Analyzer
+
+#### Podstawowe użycie
+
+```bash
+python bitbucket_main.py --project PROJ --repository my-repo \
+    --authors john.doe jane.smith
+```
+
+#### Z zakresem dat
+
+```bash
+python bitbucket_main.py --project PROJ --repository my-repo \
+    --authors john.doe jane.smith bob.wilson \
+    --start-date 2024-01-01 --end-date 2024-12-31
+```
+
+#### Z aliasami użytkowników (grupowanie zespołowe)
+
+```bash
+python bitbucket_main.py --project PROJ --repository my-repo \
+    --authors john.doe jane.smith bob.wilson alice.jones \
+    --aliases "Team A:john.doe,jane.smith" "Team B:bob.wilson,alice.jones" \
+    --start-date 2024-01-01
+```
+
+#### Ze szczegółową listą commitów
+
+```bash
+python bitbucket_main.py --project PROJ --repository my-repo \
+    --authors john.doe \
+    --detailed-commits \
+    --output john_commits_report.html
+```
+
+### Jak Działa Liczenie Linii?
+
+- **Linie dodane**: Nowe linie dodane do kodu
+- **Linie usunięte**: Linie usunięte z kodu
+- **Linie zmodyfikowane**: Linie zmienione (nie liczone jako dodane + usunięte)
+- **Suma zmian**: Dodane + Usunięte + Zmodyfikowane
+
+> **Uwaga**: Linie zmodyfikowane są liczone oddzielnie. Jeśli linia została zmieniona,
+> jest liczona jako "zmodyfikowana", a nie jako "usunięta + dodana".
+
+### Raport Bitbucket
+
+Wygenerowany raport HTML zawiera:
+
+1. **Podsumowanie statystyk** - całkowite liczby dla wszystkich użytkowników
+2. **Rankingi Top 3 i Bottom 3** - według commitów, zmian i PRów
+3. **Szczegółowa tabela użytkowników** - pełne statystyki dla każdego developera
+4. **Szczegółowe listy commitów** (opcjonalnie) - dla każdego użytkownika
+
+📖 **Pełna dokumentacja**: [bitbucket_analyzer/README.md](bitbucket_analyzer/README.md)
+
+---
 
 ## Licencja
 
