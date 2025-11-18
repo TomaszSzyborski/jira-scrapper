@@ -25,6 +25,9 @@ from jira_analyzer import JiraFetcher, FlowAnalyzer, ReportGenerator
 from jira_analyzer.xray_fetcher import XrayFetcher
 from jira_analyzer.xray_analyzer import XrayAnalyzer
 from jira_analyzer.xray_reporter import XrayReportGenerator
+from jira_analyzer.bitbucket_fetcher import BitbucketFetcher
+from jira_analyzer.bitbucket_analyzer import BitbucketAnalyzer
+from jira_analyzer.bitbucket_reporter import BitbucketReportGenerator
 
 
 app = FastAPI(
@@ -60,6 +63,18 @@ class XrayReportRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     test_plan: Optional[str] = None
+    force_fetch: bool = False
+
+
+class BitbucketReportRequest(BaseModel):
+    """Request model for generating a Bitbucket repository report."""
+    project: str
+    repository: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    user_emails: Optional[List[str]] = None
+    user_names: Optional[List[str]] = None
+    fetch_prs: bool = False
     force_fetch: bool = False
 
 
@@ -357,6 +372,131 @@ async def generate_xray_report_task(report_id: str, report_req: XrayReportReques
         # Update status
         report_statuses[report_id]["status"] = "completed"
         report_statuses[report_id]["message"] = "Xray test report generated successfully"
+        report_statuses[report_id]["report_url"] = f"/api/reports/view/{report_id}/{report_filename}"
+
+    except Exception as e:
+        report_statuses[report_id]["status"] = "failed"
+        report_statuses[report_id]["message"] = f"Error: {str(e)}"
+
+
+@app.post("/api/bitbucket/reports/generate", response_model=ReportStatus)
+async def generate_bitbucket_report(report_req: BitbucketReportRequest, background_tasks: BackgroundTasks):
+    """
+    Generate a Bitbucket repository analysis report.
+
+    This endpoint initiates Bitbucket report generation as a background task.
+    """
+    # Generate report ID
+    report_id = f"bitbucket_{report_req.project}_{report_req.repository}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Create status entry
+    status = ReportStatus(
+        report_id=report_id,
+        status="pending",
+        message="Bitbucket repository report generation queued",
+        created_at=datetime.now().isoformat()
+    )
+    report_statuses[report_id] = status.dict()
+
+    # Add background task
+    background_tasks.add_task(
+        generate_bitbucket_report_task,
+        report_id,
+        report_req
+    )
+
+    return status
+
+
+async def generate_bitbucket_report_task(report_id: str, report_req: BitbucketReportRequest):
+    """Background task to generate a Bitbucket repository report."""
+    try:
+        # Update status
+        report_statuses[report_id]["status"] = "generating"
+        report_statuses[report_id]["message"] = "Fetching repository data from Bitbucket..."
+
+        # Cache file path
+        cache_file = CACHE_DIR / f"bitbucket_{report_req.project}_{report_req.repository}_data.json"
+
+        # Check cache or fetch
+        if cache_file.exists() and not report_req.force_fetch:
+            report_statuses[report_id]["message"] = "Using cached Bitbucket data..."
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cached_data = json.load(f)
+            commits = cached_data['commits']
+            pull_requests = cached_data.get('pull_requests', [])
+        else:
+            report_statuses[report_id]["message"] = "Fetching from Bitbucket API..."
+            fetcher = BitbucketFetcher()
+
+            # Fetch commits
+            commits = fetcher.fetch_commits(
+                project=report_req.project,
+                repository=report_req.repository,
+                start_date=report_req.start_date,
+                end_date=report_req.end_date,
+                user_emails=report_req.user_emails,
+                user_names=report_req.user_names,
+                batch_size=100
+            )
+
+            # Fetch pull requests if requested
+            pull_requests = []
+            if report_req.fetch_prs:
+                pull_requests = fetcher.fetch_pull_requests(
+                    project=report_req.project,
+                    repository=report_req.repository,
+                    start_date=report_req.start_date,
+                    end_date=report_req.end_date,
+                    state='ALL',
+                    batch_size=100
+                )
+
+            # Save to cache
+            cache_data = {
+                'commits': commits,
+                'pull_requests': pull_requests,
+                'metadata': {
+                    'project': report_req.project,
+                    'repository': report_req.repository,
+                    'fetched_at': datetime.now().isoformat()
+                }
+            }
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, indent=2)
+
+        # Analyze repository data
+        report_statuses[report_id]["message"] = "Analyzing repository data..."
+        analyzer = BitbucketAnalyzer(
+            commits=commits,
+            pull_requests=pull_requests,
+            start_date=report_req.start_date,
+            end_date=report_req.end_date
+        )
+        metrics = analyzer.calculate_metrics()
+
+        # Generate HTML report
+        report_statuses[report_id]["message"] = "Generating HTML report..."
+        report_filename = f"{report_id}.html"
+        report_path = REPORTS_DIR / report_filename
+
+        metadata = {
+            'project': report_req.project,
+            'repository': report_req.repository,
+            'start_date': report_req.start_date or 'All time',
+            'end_date': report_req.end_date or 'Present'
+        }
+
+        generator = BitbucketReportGenerator(
+            metadata,
+            metrics,
+            bitbucket_url=os.getenv('BITBUCKET_URL')
+        )
+        generator.generate_html(str(report_path))
+
+        # Update status
+        report_statuses[report_id]["status"] = "completed"
+        report_statuses[report_id]["message"] = "Bitbucket repository report generated successfully"
         report_statuses[report_id]["report_url"] = f"/api/reports/view/{report_id}/{report_filename}"
 
     except Exception as e:

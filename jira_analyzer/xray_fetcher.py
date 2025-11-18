@@ -197,31 +197,69 @@ class XrayFetcher:
             List of test run dictionaries
 
         Note:
-            Uses Xray REST API endpoint: /rest/raven/1.0/api/testrun
+            Uses Xray REST API endpoints:
+            1. /rest/raven/1.0/api/testexec/{key}/test - get test list
+            2. /rest/raven/1.0/api/testrun - get individual test run details
         """
         try:
-            # Xray API endpoint for test runs
-            url = f"{self.jira_url}/rest/raven/1.0/api/testrun?testExecIssueKey={execution_key}"
+            # Step 1: Get list of tests in this execution
+            tests_url = f"{self.jira_url}/rest/raven/1.0/api/testexec/{execution_key}/test"
+            tests_response = self.jira._session.get(tests_url)
+            tests_response.raise_for_status()
+            test_keys = tests_response.json()
 
-            # Make request using JIRA client's session
-            response = self.jira._session.get(url)
-            response.raise_for_status()
+            if not test_keys:
+                print(f"  No tests found in execution {execution_key}")
+                return []
 
-            test_runs_data = response.json()
-
+            # Step 2: Get test run details for each test
             test_runs = []
-            for run in test_runs_data:
-                test_runs.append({
-                    'id': run.get('id'),
-                    'test_key': run.get('testKey'),
-                    'status': run.get('status', {}).get('name', 'Unknown'),
-                    'started_on': run.get('startedOn'),
-                    'finished_on': run.get('finishedOn'),
-                    'executed_by': run.get('executedBy'),
-                    'defects': run.get('defects', []),
-                    'examples': run.get('examples', []),
-                    'comment': run.get('comment', '')
-                })
+            for test_key in test_keys:
+                try:
+                    # Get test run for this specific test in this execution
+                    run_url = f"{self.jira_url}/rest/raven/1.0/api/testrun?testExecIssueKey={execution_key}&testIssueKey={test_key}"
+                    run_response = self.jira._session.get(run_url)
+                    run_response.raise_for_status()
+                    run_data = run_response.json()
+
+                    # Calculate duration if started and finished times are available
+                    duration = None
+                    if run_data.get('startedOn') and run_data.get('finishedOn'):
+                        try:
+                            started = datetime.fromisoformat(run_data['startedOn'].replace('Z', '+00:00'))
+                            finished = datetime.fromisoformat(run_data['finishedOn'].replace('Z', '+00:00'))
+                            duration = (finished - started).total_seconds() / 60  # duration in minutes
+                        except Exception:
+                            pass
+
+                    test_runs.append({
+                        'id': run_data.get('id'),
+                        'test_key': test_key,
+                        'status': run_data.get('status', {}).get('name', 'Unknown') if isinstance(run_data.get('status'), dict) else run_data.get('status', 'Unknown'),
+                        'started_on': run_data.get('startedOn'),
+                        'finished_on': run_data.get('finishedOn'),
+                        'duration_minutes': duration,
+                        'executed_by': run_data.get('executedBy'),
+                        'defects': run_data.get('defects', []),
+                        'examples': run_data.get('examples', []),
+                        'comment': run_data.get('comment', '')
+                    })
+
+                except Exception as e:
+                    print(f"  Warning: Could not fetch test run for {test_key} in {execution_key}: {e}")
+                    # Add test with unknown status if we can't fetch the run
+                    test_runs.append({
+                        'id': None,
+                        'test_key': test_key,
+                        'status': 'Unknown',
+                        'started_on': None,
+                        'finished_on': None,
+                        'duration_minutes': None,
+                        'executed_by': None,
+                        'defects': [],
+                        'examples': [],
+                        'comment': ''
+                    })
 
             return test_runs
 

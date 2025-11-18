@@ -1,312 +1,322 @@
 #!/usr/bin/env python3
 """
-Bitbucket Commit Analyzer - Main CLI Entry Point.
+Bitbucket Repository Analyzer - Standalone CLI
 
-This script fetches commit and pull request data from Bitbucket Server (On-Premise),
-analyzes productivity metrics, and generates comprehensive HTML reports with rankings.
+This script fetches repository data from Bitbucket Server/Data Center
+and generates comprehensive analysis reports.
 
 Usage:
-    python bitbucket_main.py --project PROJ --repository my-repo \\
-        --authors user1 user2 user3 \\
-        --start-date 2024-01-01 --end-date 2024-12-31
+    python bitbucket_main.py --project PROJ --repository myrepo --report
 
-Example with user aliases:
-    python bitbucket_main.py --project PROJ --repository my-repo \\
-        --authors john.doe jane.smith bob.wilson \\
-        --aliases "Team A:john.doe,jane.smith" "Team B:bob.wilson" \\
-        --start-date 2024-01-01 --end-date 2024-12-31
+Example:
+    # Generate full repository report
+    python bitbucket_main.py --project PROJ --repository myrepo --report
+
+    # Filter by user emails
+    python bitbucket_main.py --project PROJ --repository myrepo --user-emails user1@example.com,user2@example.com --report
+
+    # Filter by date range
+    python bitbucket_main.py --project PROJ --repository myrepo --start-date 2024-01-01 --end-date 2024-12-31 --report
 """
 
 import argparse
-import sys
 import json
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
-from bitbucket_analyzer import BitbucketFetcher, CommitAnalyzer, ReportGenerator
-
-
-def parse_aliases(alias_args):
-    """
-    Parse alias arguments into a dictionary.
-
-    Args:
-        alias_args: List of strings in format "GroupName:user1,user2,user3"
-
-    Returns:
-        Dictionary mapping usernames to group names
-
-    Example:
-        >>> parse_aliases(["Team A:john,jane", "Team B:bob"])
-        {'john': 'Team A', 'jane': 'Team A', 'bob': 'Team B'}
-    """
-    if not alias_args:
-        return {}
-
-    user_to_group = {}
-    for alias in alias_args:
-        try:
-            group_name, users = alias.split(':', 1)
-            usernames = [u.strip() for u in users.split(',')]
-            for username in usernames:
-                user_to_group[username] = group_name.strip()
-        except ValueError:
-            print(f"⚠️  Warning: Invalid alias format: {alias}")
-            print("   Expected format: 'GroupName:user1,user2,user3'")
-
-    return user_to_group
+from jira_analyzer.bitbucket_fetcher import BitbucketFetcher
+from jira_analyzer.bitbucket_analyzer import BitbucketAnalyzer
+from jira_analyzer.bitbucket_reporter import BitbucketReportGenerator
 
 
-def main():
-    """Main entry point for Bitbucket commit analyzer."""
+def parse_arguments():
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description='Analyze Bitbucket commits and generate productivity reports',
+        description='Bitbucket Repository Analyzer - Generate repository analysis reports',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage
-  python bitbucket_main.py --project PROJ --repository my-repo \\
-      --authors john.doe jane.smith
+  # Generate repository report
+  %(prog)s --project PROJ --repository myrepo --report
 
-  # With date range
-  python bitbucket_main.py --project PROJ --repository my-repo \\
-      --authors john.doe jane.smith \\
-      --start-date 2024-01-01 --end-date 2024-12-31
+  # Filter by specific users
+  %(prog)s --project PROJ --repository myrepo --user-emails user1@example.com,user2@example.com --report
 
-  # With user aliases (team grouping)
-  python bitbucket_main.py --project PROJ --repository my-repo \\
-      --authors john.doe jane.smith bob.wilson \\
-      --aliases "Team A:john.doe,jane.smith" "Team B:bob.wilson"
+  # Generate report for date range
+  %(prog)s --project PROJ --repository myrepo --start-date 2024-01-01 --end-date 2024-12-31 --report
 
-  # With detailed commit output
-  python bitbucket_main.py --project PROJ --repository my-repo \\
-      --authors john.doe \\
-      --detailed-commits
+  # Include pull requests
+  %(prog)s --project PROJ --repository myrepo --fetch-prs --report
         """
     )
 
-    # Required arguments
     parser.add_argument(
-        '--project', '-p',
+        '--project',
         required=True,
-        help='Bitbucket project key (e.g., "PROJ")'
+        help='Bitbucket project key (e.g., PROJ)'
     )
 
     parser.add_argument(
-        '--repository', '-r',
+        '--repository',
         required=True,
-        help='Repository name/slug (e.g., "my-repo")'
-    )
-
-    # Optional arguments
-    parser.add_argument(
-        '--authors', '-a',
-        nargs='+',
-        help='Usernames to analyze (e.g., john.doe jane.smith). If not specified, all authors are included.'
+        help='Repository slug (e.g., my-repo)'
     )
 
     parser.add_argument(
         '--start-date',
-        help='Start date for analysis (YYYY-MM-DD)'
+        help='Start date for filtering commits (YYYY-MM-DD)'
     )
 
     parser.add_argument(
         '--end-date',
-        help='End date for analysis (YYYY-MM-DD)'
+        help='End date for filtering commits (YYYY-MM-DD)'
     )
 
     parser.add_argument(
-        '--branch',
-        default='master',
-        help='Branch name to analyze (default: master)'
+        '--user-emails',
+        help='Comma-separated list of user emails to filter by'
     )
 
     parser.add_argument(
-        '--aliases',
-        nargs='*',
-        help='User aliases/groups in format "GroupName:user1,user2" (can be specified multiple times)'
+        '--user-names',
+        help='Comma-separated list of usernames to filter by'
     )
 
     parser.add_argument(
-        '--output', '-o',
-        default='bitbucket_commit_report.html',
-        help='Output HTML report filename (default: bitbucket_commit_report.html)'
-    )
-
-    parser.add_argument(
-        '--cache-dir',
-        default='data/bitbucket_cache',
-        help='Directory for caching fetched data (default: data/bitbucket_cache)'
-    )
-
-    parser.add_argument(
-        '--detailed-commits',
+        '--fetch-prs',
         action='store_true',
-        help='Include detailed commit lists in the report'
+        help='Fetch and analyze pull requests (default: False)'
     )
 
     parser.add_argument(
         '--pr-state',
         choices=['ALL', 'OPEN', 'MERGED', 'DECLINED'],
         default='ALL',
-        help='Pull request state to fetch (default: ALL)'
+        help='Pull request state filter (default: ALL)'
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=100,
+        help='Number of items to fetch per request (default: 100)'
+    )
 
-    try:
-        print("=" * 80)
-        print("Bitbucket Commit Analyzer")
-        print("=" * 80)
+    parser.add_argument(
+        '--output',
+        default='bitbucket_data.json',
+        help='Cache file path (default: bitbucket_data.json)'
+    )
 
-        # Parse user aliases
-        user_aliases = parse_aliases(args.aliases)
-        if user_aliases:
-            print(f"\n📋 User Aliases:")
-            for user, group in user_aliases.items():
-                print(f"   {user} → {group}")
+    parser.add_argument(
+        '--report',
+        action='store_true',
+        help='Generate HTML report'
+    )
 
-        # Initialize fetcher
-        print(f"\n🔌 Connecting to Bitbucket...")
-        fetcher = BitbucketFetcher()
+    parser.add_argument(
+        '--report-output',
+        default='bitbucket_report.html',
+        help='HTML report output path (default: bitbucket_report.html)'
+    )
 
-        # Create cache directory
-        cache_dir = Path(args.cache_dir)
-        cache_dir.mkdir(parents=True, exist_ok=True)
+    parser.add_argument(
+        '--force-fetch',
+        action='store_true',
+        help='Force fetch from Bitbucket, ignore cache'
+    )
 
-        # Cache file path
-        cache_key = f"{args.project}_{args.repository}_{args.branch}_{args.start_date or 'all'}_{args.end_date or 'all'}"
-        cache_file = cache_dir / f"{cache_key}.json"
+    return parser.parse_args()
 
-        # Fetch commits (with caching)
-        if cache_file.exists():
-            print(f"\n💾 Loading commits from cache: {cache_file}")
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                cache_data = json.load(f)
-            commits = cache_data.get('commits', [])
-            prs = cache_data.get('pull_requests', [])
-        else:
+
+def load_cached_data(cache_file: str) -> dict:
+    """
+    Load cached repository data from file.
+
+    Args:
+        cache_file: Path to cache file
+
+    Returns:
+        Cached data dictionary or None if not found
+    """
+    cache_path = Path(cache_file)
+    if cache_path.exists():
+        print(f"Loading cached data from {cache_file}...")
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return None
+
+
+def save_cached_data(data: dict, cache_file: str):
+    """
+    Save repository data to cache file.
+
+    Args:
+        data: Data dictionary to cache
+        cache_file: Path to cache file
+    """
+    print(f"Saving data to cache: {cache_file}")
+    with open(cache_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+
+
+def main():
+    """Main execution function."""
+    args = parse_arguments()
+
+    print("=" * 80)
+    print("Bitbucket Repository Analyzer")
+    print("=" * 80)
+
+    # Parse user filters
+    user_emails = None
+    user_names = None
+    if args.user_emails:
+        user_emails = [email.strip() for email in args.user_emails.split(',')]
+        print(f"Filtering by user emails: {user_emails}")
+
+    if args.user_names:
+        user_names = [name.strip() for name in args.user_names.split(',')]
+        print(f"Filtering by usernames: {user_names}")
+
+    # Check for cached data
+    cached_data = None
+    if not args.force_fetch:
+        cached_data = load_cached_data(args.output)
+
+    # Fetch or use cached data
+    if cached_data:
+        print("Using cached repository data")
+        commits = cached_data.get('commits', [])
+        pull_requests = cached_data.get('pull_requests', [])
+        repo_info = cached_data.get('repository_info', {})
+    else:
+        print("\nFetching repository data from Bitbucket...")
+
+        try:
+            fetcher = BitbucketFetcher()
+
+            # Fetch repository info
+            print("\nFetching repository information...")
+            repo_info = fetcher.fetch_repository_info(args.project, args.repository)
+            print(f"Repository: {repo_info.get('name', 'N/A')}")
+            print(f"Description: {repo_info.get('description', 'N/A')}")
+
             # Fetch commits
             commits = fetcher.fetch_commits(
                 project=args.project,
                 repository=args.repository,
-                authors=args.authors,
                 start_date=args.start_date,
                 end_date=args.end_date,
-                branch=args.branch
+                user_emails=user_emails,
+                user_names=user_names,
+                batch_size=args.batch_size
             )
 
-            # Fetch pull requests
-            prs = fetcher.fetch_pull_requests(
-                project=args.project,
-                repository=args.repository,
-                authors=args.authors,
-                start_date=args.start_date,
-                end_date=args.end_date,
-                state=args.pr_state
-            )
+            # Fetch pull requests if requested
+            pull_requests = []
+            if args.fetch_prs:
+                pull_requests = fetcher.fetch_pull_requests(
+                    project=args.project,
+                    repository=args.repository,
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    state=args.pr_state,
+                    batch_size=args.batch_size
+                )
 
-            # Cache the results
+            # Cache the data
             cache_data = {
+                'commits': commits,
+                'pull_requests': pull_requests,
+                'repository_info': repo_info,
                 'metadata': {
                     'project': args.project,
                     'repository': args.repository,
-                    'branch': args.branch,
+                    'fetched_at': datetime.now().isoformat(),
                     'start_date': args.start_date,
                     'end_date': args.end_date,
-                    'authors': args.authors,
-                    'fetched_at': datetime.now().isoformat()
-                },
-                'commits': commits,
-                'pull_requests': prs
+                    'user_emails': user_emails,
+                    'user_names': user_names,
+                }
             }
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2, ensure_ascii=False)
-            print(f"💾 Cached data saved to: {cache_file}")
+            save_cached_data(cache_data, args.output)
 
-        # Fetch commit diffs (this can take a while)
-        print(f"\n📊 Fetching diff statistics for {len(commits)} commits...")
-        commit_diffs = {}
-        for i, commit in enumerate(commits, 1):
-            commit_id = commit.get('id', '')
-            if commit_id:
-                if i % 10 == 0:
-                    print(f"   Progress: {i}/{len(commits)}")
-                diff_stats = fetcher.fetch_commit_diff(
-                    args.project,
-                    args.repository,
-                    commit_id
-                )
-                commit_diffs[commit_id] = diff_stats
+        except Exception as e:
+            print(f"\n❌ Error fetching repository data: {e}")
+            sys.exit(1)
 
-        # Analyze commits
-        print(f"\n🔍 Analyzing commit statistics...")
-        analyzer = CommitAnalyzer(
-            commits=commits,
-            commit_diffs=commit_diffs,
-            prs=prs,
-            user_aliases=user_aliases
-        )
+    # Analyze the data
+    print("\n" + "=" * 80)
+    print("Analyzing repository data...")
+    print("=" * 80)
 
-        user_stats = analyzer.calculate_statistics()
-        rankings = analyzer.get_rankings(user_stats)
-        summary = analyzer.get_summary(user_stats)
+    analyzer = BitbucketAnalyzer(
+        commits=commits,
+        pull_requests=pull_requests,
+        start_date=args.start_date,
+        end_date=args.end_date
+    )
 
-        # Get detailed commits if requested
-        detailed_commits = {}
-        if args.detailed_commits:
-            print(f"\n📝 Collecting detailed commit information...")
-            for username in user_stats.keys():
-                detailed_commits[username] = analyzer.get_detailed_commit_list(username)
+    metrics = analyzer.calculate_metrics()
 
-        # Generate report
-        print(f"\n📄 Generating HTML report...")
+    # Print summary
+    print(f"\n📊 Summary:")
+    print(f"  Total Commits: {metrics['total_commits']}")
+    print(f"  Total Contributors: {metrics['total_contributors']}")
+    print(f"  Total Pull Requests: {metrics['total_pull_requests']}")
+
+    activity = metrics.get('activity_summary', {})
+    print(f"\n📈 Activity:")
+    print(f"  Busiest Day: {activity.get('busiest_day', 'N/A')} ({activity.get('busiest_day_commits', 0)} commits)")
+    print(f"  Avg Commits/Day: {activity.get('avg_commits_per_day', 0):.2f}")
+
+    busiest_contributor = activity.get('busiest_contributor')
+    if busiest_contributor:
+        print(f"  Top Contributor: {busiest_contributor['name']} ({busiest_contributor['commits']} commits)")
+
+    # Top contributors
+    top_contributors = analyzer.get_top_contributors(limit=5)
+    if top_contributors:
+        print(f"\n👥 Top 5 Contributors:")
+        for i, contributor in enumerate(top_contributors, 1):
+            print(f"  {i}. {contributor['name']} ({contributor['email']}): {contributor['commits']} commits")
+
+    # Generate HTML report if requested
+    if args.report:
+        print("\n" + "=" * 80)
+        print("Generating HTML Report...")
+        print("=" * 80)
+
         metadata = {
             'project': args.project,
             'repository': args.repository,
-            'branch': args.branch,
-            'start_date': args.start_date or 'Beginning',
-            'end_date': args.end_date or 'Now',
-            'generated_at': datetime.now().isoformat()
+            'start_date': args.start_date or 'All time',
+            'end_date': args.end_date or 'Present',
         }
 
-        generator = ReportGenerator(
-            user_stats=user_stats,
-            rankings=rankings,
-            summary=summary,
-            metadata=metadata,
-            detailed_commits=detailed_commits
-        )
+        try:
+            import os
+            bitbucket_url = os.getenv('BITBUCKET_URL', '')
 
-        generator.generate_html(args.output)
+            reporter = BitbucketReportGenerator(
+                metadata=metadata,
+                metrics=metrics,
+                bitbucket_url=bitbucket_url
+            )
 
-        # Print summary
-        print("\n" + "=" * 80)
-        print("Summary")
-        print("=" * 80)
-        print(f"Total Users:        {summary['total_users']}")
-        print(f"Total Commits:      {summary['total_commits']}")
-        print(f"Total Changes:      {summary['total_changes']:,} lines")
-        print(f"  - Added:          {summary['total_lines_added']:,}")
-        print(f"  - Deleted:        {summary['total_lines_deleted']:,}")
-        print(f"  - Modified:       {summary['total_lines_modified']:,}")
-        print(f"Total PRs:          {summary['total_pull_requests']}")
-        print(f"\nAverage per user:   {summary['average_commits_per_user']:.1f} commits")
-        print(f"                    {summary['average_changes_per_user']:.1f} changes")
-        print(f"                    {summary['average_prs_per_user']:.1f} PRs")
+            report_file = reporter.generate_html(args.report_output)
+            print(f"\n✅ Report generated successfully: {report_file}")
+            print(f"   Open it in a browser to view the analysis")
 
-        print("\n" + "=" * 80)
-        print(f"✅ Report generated successfully: {args.output}")
-        print("=" * 80)
+        except Exception as e:
+            print(f"\n❌ Error generating report: {e}")
+            sys.exit(1)
 
-    except KeyboardInterrupt:
-        print("\n\n⚠️  Interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    print("\n" + "=" * 80)
+    print("Done!")
+    print("=" * 80)
 
 
 if __name__ == '__main__':

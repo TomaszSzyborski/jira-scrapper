@@ -321,6 +321,79 @@
         </div>
 
         <div class="card">
+            <h2>📦 Generate Bitbucket Repository Report</h2>
+
+            <div class="info-box">
+                <h3>📦 Repository Analysis</h3>
+                <p>Generate comprehensive repository analysis reports from Bitbucket:</p>
+                <p>
+                    <span class="tag">Commit Activity</span>
+                    <span class="tag">Contributors</span>
+                    <span class="tag">Pull Requests</span>
+                    <span class="tag">Code Metrics</span>
+                </p>
+            </div>
+
+            <form id="bitbucketReportForm">
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="bitbucketProject">Project Key *</label>
+                        <input type="text" id="bitbucketProject" name="bitbucketProject" required placeholder="e.g., PROJ, DEMO">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="repository">Repository *</label>
+                        <input type="text" id="repository" name="repository" required placeholder="e.g., my-repo">
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="bbStartDate">Start Date</label>
+                        <input type="date" id="bbStartDate" name="bbStartDate">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bbEndDate">End Date</label>
+                        <input type="date" id="bbEndDate" name="bbEndDate">
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="userEmails">User Emails (comma-separated, optional)</label>
+                        <input type="text" id="userEmails" name="userEmails" placeholder="e.g., user1@example.com, user2@example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userNames">Usernames (comma-separated, optional)</label>
+                        <input type="text" id="userNames" name="userNames" placeholder="e.g., john.doe, jane.smith">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="fetchPrs" name="fetchPrs">
+                        <label for="fetchPrs" style="margin: 0;">Fetch and analyze pull requests</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="bbForceFetch" name="bbForceFetch">
+                        <label for="bbForceFetch" style="margin: 0;">Force fetch from Bitbucket API (ignore cache)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn" id="bitbucketGenerateBtn">
+                    Generate Bitbucket Report
+                </button>
+
+                <div class="status-message" id="bitbucketStatusMessage"></div>
+            </form>
+        </div>
+
+        <div class="card">
             <h2>🧪 Generate Xray Test Report</h2>
 
             <div class="info-box">
@@ -533,6 +606,109 @@
             statusMsg.className = `status-message ${type}`;
             statusMsg.innerHTML = message;
             statusMsg.style.display = 'block';
+        }
+
+        function showBitbucketStatus(type, message) {
+            const statusMsg = document.getElementById('bitbucketStatusMessage');
+            statusMsg.className = `status-message ${type}`;
+            statusMsg.innerHTML = message;
+            statusMsg.style.display = 'block';
+        }
+
+        // Handle Bitbucket form submission
+        document.getElementById('bitbucketReportForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const btn = document.getElementById('bitbucketGenerateBtn');
+            const statusMsg = document.getElementById('bitbucketStatusMessage');
+
+            // Disable button
+            btn.disabled = true;
+            btn.innerHTML = 'Generating... <span class="loading-spinner"></span>';
+
+            // Get form data
+            const formData = {
+                project: document.getElementById('bitbucketProject').value,
+                repository: document.getElementById('repository').value,
+                start_date: document.getElementById('bbStartDate').value || null,
+                end_date: document.getElementById('bbEndDate').value || null,
+                user_emails: document.getElementById('userEmails').value
+                    ? document.getElementById('userEmails').value.split(',').map(s => s.trim())
+                    : null,
+                user_names: document.getElementById('userNames').value
+                    ? document.getElementById('userNames').value.split(',').map(s => s.trim())
+                    : null,
+                fetch_prs: document.getElementById('fetchPrs').checked,
+                force_fetch: document.getElementById('bbForceFetch').checked
+            };
+
+            try {
+                // Generate Bitbucket report
+                const response = await fetch(`${API_BASE}/bitbucket/reports/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate Bitbucket report');
+                }
+
+                const result = await response.json();
+
+                // Show status message
+                showBitbucketStatus('info', 'Bitbucket report generation started. Polling for status...');
+
+                // Poll for status
+                pollBitbucketReportStatus(result.report_id);
+
+            } catch (error) {
+                showBitbucketStatus('error', `Error: ${error.message}`);
+                btn.disabled = false;
+                btn.innerHTML = 'Generate Bitbucket Report';
+            }
+        });
+
+        async function pollBitbucketReportStatus(reportId) {
+            const btn = document.getElementById('bitbucketGenerateBtn');
+            const maxAttempts = 60; // 5 minutes max
+            let attempts = 0;
+
+            const interval = setInterval(async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch(`${API_BASE}/reports/status/${reportId}`);
+                    const status = await response.json();
+
+                    showBitbucketStatus('info', `${status.message}...`);
+
+                    if (status.status === 'completed') {
+                        clearInterval(interval);
+                        showBitbucketStatus('success', `Bitbucket repository report generated successfully! <a href="${status.report_url}" target="_blank" style="color: #166534; text-decoration: underline;">View Report</a>`);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Bitbucket Report';
+                        loadReports();
+                    } else if (status.status === 'failed') {
+                        clearInterval(interval);
+                        showBitbucketStatus('error', status.message);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Bitbucket Report';
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        showBitbucketStatus('error', 'Timeout waiting for Bitbucket report generation');
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Bitbucket Report';
+                    }
+                } catch (error) {
+                    clearInterval(interval);
+                    showBitbucketStatus('error', `Error polling status: ${error.message}`);
+                    btn.disabled = false;
+                    btn.innerHTML = 'Generate Bitbucket Report';
+                }
+            }, 5000); // Poll every 5 seconds
         }
 
         // Handle Xray form submission
