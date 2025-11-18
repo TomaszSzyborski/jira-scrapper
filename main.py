@@ -281,7 +281,8 @@ def main():
                 end_date=args.end_date,
                 jira_url=os.getenv('JIRA_URL'),
                 label=args.label,
-                flow_metrics_no_label=flow_metrics_no_label
+                flow_metrics_no_label=flow_metrics_no_label,
+                all_issues=cached_data['issues']  # Pass all issues for interactive filtering
             )
             report_path = generator.generate_html(args.report_output)
 
@@ -383,7 +384,8 @@ def main():
                 end_date=args.end_date,
                 jira_url=fetcher.jira_url,
                 label=args.label,
-                flow_metrics_no_label=flow_metrics_no_label
+                flow_metrics_no_label=flow_metrics_no_label,
+                all_issues=issues  # Pass all issues for interactive filtering
             )
             report_path = generator.generate_html(args.report_output)
 

@@ -38,7 +38,7 @@ class ReportGenerator:
         >>> print(f"Report saved to {report_path}")
     """
 
-    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None, jira_url: str = None, label: str = None, flow_metrics_no_label: dict = None):
+    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None, jira_url: str = None, label: str = None, flow_metrics_no_label: dict = None, all_issues: list = None):
         """
         Initialize report generator.
 
@@ -52,6 +52,7 @@ class ReportGenerator:
             jira_url: Optional Jira instance URL for creating ticket links
             label: Optional label filter that was applied
             flow_metrics_no_label: Optional metrics calculated without label filter (for comparison/toggle)
+            all_issues: Optional list of ALL raw issues for client-side filtering (enables interactive mode)
         """
         self.metadata = metadata
         self.flow_metrics = flow_metrics
@@ -60,6 +61,7 @@ class ReportGenerator:
         self.jira_url = jira_url
         self.label = label
         self.flow_metrics_no_label = flow_metrics_no_label
+        self.all_issues = all_issues  # For interactive filtering
 
     def _calculate_trend(self, x_values: list, y_values: list) -> list:
         """
@@ -123,6 +125,132 @@ class ReportGenerator:
                     <span style="color: #94a3b8;">Bez filtra: {total_without_label} błędów</span>
                 </div>
             </div>
+        '''
+
+    def _prepare_issues_for_embedding(self) -> str:
+        """
+        Prepare all issues data for embedding in HTML for client-side filtering.
+
+        Returns:
+            JavaScript variable declaration with issues data
+        """
+        if not self.all_issues:
+            return "const rawIssuesData = null;"
+
+        simplified_issues = []
+
+        for issue in self.all_issues:
+            # Extract transitions from changelog
+            transitions = []
+            if 'changelog' in issue and issue['changelog']:
+                prev_status = issue.get('status', '')
+                prev_date = issue.get('created', '')
+
+                for entry in issue['changelog']:
+                    for item in entry.get('items', []):
+                        if item.get('field') == 'status':
+                            transitions.append({
+                                'from': item.get('fromString', prev_status),
+                                'to': item.get('toString', ''),
+                                'date': entry.get('created', '')[:10] if entry.get('created') else '',
+                                'author': entry.get('author', {}).get('displayName', '') if isinstance(entry.get('author'), dict) else str(entry.get('author', ''))
+                            })
+                            prev_status = item.get('toString', prev_status)
+
+            simplified_issues.append({
+                'key': issue.get('key', ''),
+                'type': issue.get('type', ''),
+                'status': issue.get('status', ''),
+                'created': issue.get('created', '')[:10] if issue.get('created') else '',
+                'resolved': issue.get('resolved', '')[:10] if issue.get('resolved') else None,
+                'labels': issue.get('labels', []),
+                'assignee': issue.get('assignee', 'Unassigned'),
+                'priority': issue.get('priority', ''),
+                'summary': issue.get('summary', ''),
+                'transitions': transitions
+            })
+
+        return f"const rawIssuesData = {json.dumps(simplified_issues, ensure_ascii=False)};"
+
+    def _generate_interactive_filter_panel(self) -> str:
+        """
+        Generate HTML for interactive filter panel.
+
+        Returns:
+            HTML string for filter controls, or empty if no raw data
+        """
+        if not self.all_issues:
+            return ""
+
+        return '''
+        <div class="interactive-filter-panel">
+            <div class="filter-header" onclick="toggleFilterPanel()">
+                <h3>🔍 Filtry Interaktywne <span class="toggle-icon">▼</span></h3>
+                <p class="filter-hint">Kliknij aby rozwinąć/zwinąć panel filtrów</p>
+            </div>
+
+            <div class="filter-content" id="filter-content">
+                <!-- Status Filters -->
+                <div class="filter-section">
+                    <h4>📊 Statusy</h4>
+                    <div class="filter-controls-row">
+                        <button class="btn-small" onclick="selectAllStatuses()">Zaznacz wszystkie</button>
+                        <button class="btn-small" onclick="deselectAllStatuses()">Odznacz wszystkie</button>
+                    </div>
+                    <div id="status-filters" class="checkbox-grid"></div>
+                </div>
+
+                <!-- Label Filters -->
+                <div class="filter-section">
+                    <h4>🏷️ Labelki</h4>
+                    <select id="label-filter" multiple size="6">
+                        <!-- Dynamically populated -->
+                    </select>
+                    <p class="filter-hint-small">Przytrzymaj Ctrl/Cmd aby wybrać wiele</p>
+                </div>
+
+                <!-- Issue Type Filters -->
+                <div class="filter-section">
+                    <h4>📝 Typ Zadania</h4>
+                    <div id="type-filters" class="checkbox-grid"></div>
+                </div>
+
+                <!-- Date Range Filter -->
+                <div class="filter-section">
+                    <h4>📅 Zakres Dat</h4>
+                    <div class="date-inputs">
+                        <label>Od: <input type="date" id="date-start" onchange="applyFilters()"></label>
+                        <label>Do: <input type="date" id="date-end" onchange="applyFilters()"></label>
+                    </div>
+                    <div class="date-presets">
+                        <button class="btn-preset" onclick="setDatePreset('last30days')">Ostatnie 30 dni</button>
+                        <button class="btn-preset" onclick="setDatePreset('lastQuarter')">Ostatni kwartał</button>
+                        <button class="btn-preset" onclick="setDatePreset('all')">Wszystkie</button>
+                    </div>
+                </div>
+
+                <!-- Filter Actions -->
+                <div class="filter-actions">
+                    <button class="btn-primary" onclick="applyFilters()">
+                        <span class="btn-icon">✓</span> Zastosuj Filtry
+                    </button>
+                    <button class="btn-secondary" onclick="resetFilters()">
+                        <span class="btn-icon">↺</span> Resetuj
+                    </button>
+                </div>
+
+                <!-- Filter Summary -->
+                <div class="filter-summary">
+                    <div class="summary-stat">
+                        <span class="summary-label">Wyświetlane zadania:</span>
+                        <span class="summary-value">
+                            <span id="filtered-count" class="highlight">0</span> / <span id="total-count">0</span>
+                        </span>
+                    </div>
+                    <div id="filter-active-tags" class="active-filters-tags"></div>
+                </div>
+            </div>
+        </div>
         '''
 
     def _prepare_dataset_json(self, metrics: dict, dates_actual, created_counts, closed_counts, open_counts,
@@ -619,6 +747,240 @@ class ReportGenerator:
             font-size: 0.9em;
             color: #64748b;
         }}
+        /* Interactive Filter Panel Styles */
+        .interactive-filter-panel {{
+            background: white;
+            border-radius: 12px;
+            padding: 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }}
+        .filter-header {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .filter-header:hover {{
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }}
+        .filter-header h3 {{
+            color: white;
+            margin: 0;
+            font-size: 1.5em;
+        }}
+        .filter-hint {{
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin: 5px 0 0 0;
+        }}
+        .toggle-icon {{
+            font-size: 1.2em;
+            transition: transform 0.3s;
+        }}
+        .filter-header.collapsed .toggle-icon {{
+            transform: rotate(-90deg);
+        }}
+        .filter-content {{
+            padding: 30px;
+            display: block;
+        }}
+        .filter-content.hidden {{
+            display: none;
+        }}
+        .filter-section {{
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }}
+        .filter-section:last-of-type {{
+            border-bottom: none;
+        }}
+        .filter-section h4 {{
+            color: #2d3748;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }}
+        .checkbox-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }}
+        .checkbox-label {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f7fafc;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .checkbox-label:hover {{
+            background: #edf2f7;
+        }}
+        .checkbox-label input[type="checkbox"] {{
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }}
+        .filter-controls-row {{
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }}
+        .btn-small {{
+            padding: 6px 12px;
+            font-size: 0.85em;
+            background: #e2e8f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .btn-small:hover {{
+            background: #cbd5e1;
+        }}
+        #label-filter {{
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #f7fafc;
+            font-size: 0.95em;
+        }}
+        .filter-hint-small {{
+            font-size: 0.8em;
+            color: #718096;
+            margin-top: 5px;
+        }}
+        .date-inputs {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 12px;
+        }}
+        .date-inputs label {{
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            font-size: 0.9em;
+            color: #4a5568;
+        }}
+        .date-inputs input[type="date"] {{
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #f7fafc;
+        }}
+        .date-presets {{
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }}
+        .btn-preset {{
+            padding: 8px 16px;
+            font-size: 0.85em;
+            background: #e0e7ff;
+            color: #3730a3;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .btn-preset:hover {{
+            background: #c7d2fe;
+        }}
+        .filter-actions {{
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }}
+        .btn-primary {{
+            flex: 1;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }}
+        .btn-primary:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }}
+        .btn-secondary {{
+            flex: 1;
+            padding: 12px 24px;
+            background: #e2e8f0;
+            color: #2d3748;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .btn-secondary:hover {{
+            background: #cbd5e1;
+        }}
+        .btn-icon {{
+            margin-right: 6px;
+        }}
+        .filter-summary {{
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            border-radius: 6px;
+        }}
+        .summary-stat {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }}
+        .summary-label {{
+            color: #374151;
+            font-weight: 500;
+        }}
+        .summary-value {{
+            font-size: 1.1em;
+            color: #1f2937;
+        }}
+        .highlight {{
+            color: #10b981;
+            font-weight: 700;
+            font-size: 1.3em;
+        }}
+        .active-filters-tags {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }}
+        .filter-tag {{
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .filter-tag .remove {{
+            cursor: pointer;
+            font-weight: bold;
+        }}
         </style>
         </head>
         <body>
@@ -633,6 +995,8 @@ class ReportGenerator:
             </div>
             {self._generate_label_toggle_html()}
         </div>
+
+        {self._generate_interactive_filter_panel()}
 
         <div class="stats">
             <div class="stat-card">
@@ -689,14 +1053,508 @@ class ReportGenerator:
         </div>
 
         <script>
-        // Label filter toggle functionality (currently reloads page)
+        // ===== EMBEDDED RAW ISSUE DATA FOR CLIENT-SIDE FILTERING =====
+        {self._prepare_issues_for_embedding()}
+
+        // ===== FILTER STATE MANAGEMENT =====
+        let filterState = {{
+            statuses: new Set(),
+            labels: new Set(),
+            types: new Set(),
+            dateStart: null,
+            dateEnd: null
+        }};
+
+        // ===== FILTER PANEL TOGGLE =====
+        function toggleFilterPanel() {{
+            const filterContent = document.getElementById('filter-content');
+            const filterHeader = document.querySelector('.filter-header');
+            if (filterContent) {{
+                filterContent.classList.toggle('hidden');
+                filterHeader.classList.toggle('collapsed');
+            }}
+        }}
+
+        // ===== INITIALIZE FILTERS FROM DATA =====
+        function initializeFilters() {{
+            if (!rawIssuesData || rawIssuesData.length === 0) {{
+                return;
+            }}
+
+            // Extract unique statuses, labels, and types
+            const statuses = new Set();
+            const labels = new Set();
+            const types = new Set();
+
+            rawIssuesData.forEach(issue => {{
+                if (issue.status) statuses.add(issue.status);
+                if (issue.type) types.add(issue.type);
+                if (issue.labels && Array.isArray(issue.labels)) {{
+                    issue.labels.forEach(label => labels.add(label));
+                }}
+            }});
+
+            // Populate status checkboxes
+            const statusFilters = document.getElementById('status-filters');
+            if (statusFilters) {{
+                statusFilters.innerHTML = '';
+                Array.from(statuses).sort().forEach(status => {{
+                    const label = document.createElement('label');
+                    label.className = 'checkbox-label';
+                    label.innerHTML = `
+                        <input type="checkbox" value="${{status}}" checked onchange="updateFilterState()">
+                        <span>${{status}}</span>
+                    `;
+                    statusFilters.appendChild(label);
+                    filterState.statuses.add(status);
+                }});
+            }}
+
+            // Populate label select
+            const labelFilter = document.getElementById('label-filter');
+            if (labelFilter) {{
+                labelFilter.innerHTML = '';
+                if (labels.size === 0) {{
+                    const option = document.createElement('option');
+                    option.text = 'Brak etykiet';
+                    option.disabled = true;
+                    labelFilter.add(option);
+                }} else {{
+                    Array.from(labels).sort().forEach(label => {{
+                        const option = document.createElement('option');
+                        option.value = label;
+                        option.text = label;
+                        option.selected = true;
+                        labelFilter.add(option);
+                        filterState.labels.add(label);
+                    }});
+                }}
+            }}
+
+            // Populate type checkboxes
+            const typeFilters = document.getElementById('type-filters');
+            if (typeFilters) {{
+                typeFilters.innerHTML = '';
+                Array.from(types).sort().forEach(type => {{
+                    const label = document.createElement('label');
+                    label.className = 'checkbox-label';
+                    label.innerHTML = `
+                        <input type="checkbox" value="${{type}}" checked onchange="updateFilterState()">
+                        <span>${{type}}</span>
+                    `;
+                    typeFilters.appendChild(label);
+                    filterState.types.add(type);
+                }});
+            }}
+
+            // Initialize date range from data
+            if (rawIssuesData.length > 0) {{
+                const dates = rawIssuesData.map(i => i.created).filter(d => d).sort();
+                if (dates.length > 0) {{
+                    filterState.dateStart = dates[0];
+                    filterState.dateEnd = dates[dates.length - 1];
+
+                    const dateStartInput = document.getElementById('date-start');
+                    const dateEndInput = document.getElementById('date-end');
+                    if (dateStartInput) dateStartInput.value = filterState.dateStart;
+                    if (dateEndInput) dateEndInput.value = filterState.dateEnd;
+                }}
+            }}
+
+            // Initial filter summary update
+            updateFilterSummary(rawIssuesData.length, rawIssuesData.length);
+        }}
+
+        // ===== UPDATE FILTER STATE FROM UI =====
+        function updateFilterState() {{
+            // Update statuses
+            filterState.statuses.clear();
+            document.querySelectorAll('#status-filters input[type="checkbox"]:checked').forEach(cb => {{
+                filterState.statuses.add(cb.value);
+            }});
+
+            // Update labels
+            filterState.labels.clear();
+            const labelSelect = document.getElementById('label-filter');
+            if (labelSelect) {{
+                Array.from(labelSelect.selectedOptions).forEach(option => {{
+                    filterState.labels.add(option.value);
+                }});
+            }}
+
+            // Update types
+            filterState.types.clear();
+            document.querySelectorAll('#type-filters input[type="checkbox"]:checked').forEach(cb => {{
+                filterState.types.add(cb.value);
+            }});
+
+            // Update dates
+            const dateStart = document.getElementById('date-start');
+            const dateEnd = document.getElementById('date-end');
+            filterState.dateStart = dateStart ? dateStart.value : null;
+            filterState.dateEnd = dateEnd ? dateEnd.value : null;
+        }}
+
+        // ===== APPLY FILTERS =====
+        function applyFilters() {{
+            if (!rawIssuesData || rawIssuesData.length === 0) {{
+                alert('Brak danych do filtrowania');
+                return;
+            }}
+
+            updateFilterState();
+
+            // Filter issues
+            const filteredIssues = rawIssuesData.filter(issue => {{
+                // Status filter
+                if (filterState.statuses.size > 0 && !filterState.statuses.has(issue.status)) {{
+                    return false;
+                }}
+
+                // Label filter - issue must have at least one selected label
+                if (filterState.labels.size > 0) {{
+                    const issueLabels = issue.labels || [];
+                    if (issueLabels.length === 0) {{
+                        return false;
+                    }}
+                    const hasMatchingLabel = issueLabels.some(label => filterState.labels.has(label));
+                    if (!hasMatchingLabel) {{
+                        return false;
+                    }}
+                }}
+
+                // Type filter
+                if (filterState.types.size > 0 && !filterState.types.has(issue.type)) {{
+                    return false;
+                }}
+
+                // Date range filter
+                if (filterState.dateStart && issue.created < filterState.dateStart) {{
+                    return false;
+                }}
+                if (filterState.dateEnd && issue.created > filterState.dateEnd) {{
+                    return false;
+                }}
+
+                return true;
+            }});
+
+            // Recalculate metrics and update charts
+            recalculateMetrics(filteredIssues);
+            updateFilterSummary(filteredIssues.length, rawIssuesData.length);
+        }}
+
+        // ===== RECALCULATE METRICS FROM FILTERED DATA =====
+        function recalculateMetrics(filteredIssues) {{
+            // Build timeline data
+            const timelineMap = {{}};
+            const createdMap = {{}};
+            const closedMap = {{}};
+
+            filteredIssues.forEach(issue => {{
+                // Count created
+                if (issue.created) {{
+                    createdMap[issue.created] = (createdMap[issue.created] || 0) + 1;
+                }}
+
+                // Count closed
+                if (issue.resolved) {{
+                    closedMap[issue.resolved] = (closedMap[issue.resolved] || 0) + 1;
+                }}
+            }});
+
+            // Get all dates and sort
+            const allDates = new Set([...Object.keys(createdMap), ...Object.keys(closedMap)]);
+            const sortedDates = Array.from(allDates).sort();
+
+            // Build cumulative timeline
+            const dates = [];
+            const created = [];
+            const closed = [];
+            const open = [];
+
+            let totalCreated = 0;
+            let totalClosed = 0;
+
+            sortedDates.forEach(date => {{
+                totalCreated += (createdMap[date] || 0);
+                totalClosed += (closedMap[date] || 0);
+
+                dates.push(date);
+                created.push(createdMap[date] || 0);
+                closed.push(closedMap[date] || 0);
+                open.push(totalCreated - totalClosed);
+            }});
+
+            // Build flow patterns (Sankey data)
+            const flowMap = {{}};
+            const statusSet = new Set();
+
+            filteredIssues.forEach(issue => {{
+                if (issue.transitions && issue.transitions.length > 0) {{
+                    issue.transitions.forEach(trans => {{
+                        const key = `${{trans.from}} → ${{trans.to}}`;
+                        flowMap[key] = (flowMap[key] || 0) + 1;
+                        statusSet.add(trans.from);
+                        statusSet.add(trans.to);
+                    }});
+                }}
+            }});
+
+            const allStatuses = Array.from(statusSet);
+            const statusIndex = {{}};
+            allStatuses.forEach((s, i) => statusIndex[s] = i);
+
+            const sankeySource = [];
+            const sankeyTarget = [];
+            const sankeyValue = [];
+            const sankeyLabels = [];
+
+            Object.entries(flowMap).forEach(([key, count]) => {{
+                const [from, to] = key.split(' → ');
+                if (from in statusIndex && to in statusIndex) {{
+                    sankeySource.push(statusIndex[from]);
+                    sankeyTarget.push(statusIndex[to]);
+                    sankeyValue.push(count);
+                    sankeyLabels.push(`${{key}}: ${{count}}`);
+                }}
+            }});
+
+            // Update all charts
+            updateAllCharts({{
+                dates,
+                created,
+                closed,
+                open,
+                sankeyNodes: allStatuses,
+                sankeySource,
+                sankeyTarget,
+                sankeyValue,
+                sankeyLabels,
+                totalIssues: filteredIssues.length
+            }});
+        }}
+
+        // ===== UPDATE ALL CHARTS =====
+        function updateAllCharts(data) {{
+            // Update total issues count
+            const totalIssuesCount = document.getElementById('total-issues-count');
+            if (totalIssuesCount) {{
+                totalIssuesCount.textContent = data.totalIssues;
+            }}
+
+            // Update timeline chart
+            const timelineData = [
+                {{
+                    x: data.dates,
+                    y: data.created,
+                    name: 'Utworzone',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: {{ color: '#3b82f6', width: 2 }},
+                    marker: {{ size: 6 }}
+                }},
+                {{
+                    x: data.dates,
+                    y: data.closed,
+                    name: 'Zamknięte',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: {{ color: '#10b981', width: 2 }},
+                    marker: {{ size: 6 }}
+                }}
+            ];
+
+            Plotly.react('timeline-chart', timelineData, {{
+                xaxis: {{ title: 'Data' }},
+                yaxis: {{ title: 'Liczba Błędów' }},
+                hovermode: 'x unified',
+                showlegend: true,
+                height: 400
+            }}, {{responsive: true}});
+
+            // Update open bugs chart
+            const currentOpen = data.open.length > 0 ? data.open[data.open.length - 1] : 0;
+            const openData = [
+                {{
+                    x: data.dates,
+                    y: data.open,
+                    name: 'Otwarte Błędy',
+                    type: 'bar',
+                    marker: {{ color: '#f59e0b' }}
+                }}
+            ];
+
+            Plotly.react('open-chart', openData, {{
+                xaxis: {{ title: 'Data' }},
+                yaxis: {{ title: 'Liczba Otwartych Błędów' }},
+                hovermode: 'x unified',
+                showlegend: true,
+                height: 400
+            }}, {{responsive: true}});
+
+            // Update Sankey diagram
+            if (data.sankeyNodes.length > 0) {{
+                const sankeyData = [{{
+                    type: "sankey",
+                    orientation: "h",
+                    node: {{
+                        pad: 15,
+                        thickness: 30,
+                        line: {{ color: "black", width: 0.5 }},
+                        label: data.sankeyNodes,
+                        color: data.sankeyNodes.map(s => '#' + ((Math.abs(hashCode(s)) % 0xFFFFFF)).toString(16).padStart(6, '0'))
+                    }},
+                    link: {{
+                        source: data.sankeySource,
+                        target: data.sankeyTarget,
+                        value: data.sankeyValue,
+                        label: data.sankeyLabels,
+                        color: data.sankeyValue.map(() => 'rgba(128, 128, 128, 0.4)')
+                    }}
+                }}];
+
+                Plotly.react('sankey-chart', sankeyData, {{
+                    font: {{ size: 11 }},
+                    height: 700,
+                    margin: {{ l: 20, r: 20, t: 20, b: 20 }}
+                }}, {{responsive: true}});
+            }}
+        }}
+
+        // ===== HELPER FUNCTIONS =====
+        function hashCode(str) {{
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {{
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash = hash & hash;
+            }}
+            return hash;
+        }}
+
+        function selectAllStatuses() {{
+            document.querySelectorAll('#status-filters input[type="checkbox"]').forEach(cb => {{
+                cb.checked = true;
+            }});
+            updateFilterState();
+        }}
+
+        function deselectAllStatuses() {{
+            document.querySelectorAll('#status-filters input[type="checkbox"]').forEach(cb => {{
+                cb.checked = false;
+            }});
+            updateFilterState();
+        }}
+
+        function setDatePreset(preset) {{
+            const dateEnd = document.getElementById('date-end');
+            const dateStart = document.getElementById('date-start');
+
+            if (!dateEnd || !dateStart) return;
+
+            const today = new Date();
+            const endDate = today.toISOString().split('T')[0];
+
+            let startDate;
+            if (preset === 'last30days') {{
+                const d = new Date();
+                d.setDate(d.getDate() - 30);
+                startDate = d.toISOString().split('T')[0];
+            }} else if (preset === 'lastQuarter') {{
+                const d = new Date();
+                d.setMonth(d.getMonth() - 3);
+                startDate = d.toISOString().split('T')[0];
+            }} else if (preset === 'all') {{
+                if (rawIssuesData && rawIssuesData.length > 0) {{
+                    const dates = rawIssuesData.map(i => i.created).filter(d => d).sort();
+                    startDate = dates[0];
+                }}
+            }}
+
+            dateStart.value = startDate;
+            dateEnd.value = endDate;
+            applyFilters();
+        }}
+
+        function resetFilters() {{
+            // Reset all checkboxes to checked
+            document.querySelectorAll('.checkbox-label input[type="checkbox"]').forEach(cb => {{
+                cb.checked = true;
+            }});
+
+            // Select all labels
+            const labelFilter = document.getElementById('label-filter');
+            if (labelFilter) {{
+                Array.from(labelFilter.options).forEach(option => {{
+                    option.selected = true;
+                }});
+            }}
+
+            // Reset dates
+            if (rawIssuesData && rawIssuesData.length > 0) {{
+                const dates = rawIssuesData.map(i => i.created).filter(d => d).sort();
+                const dateStart = document.getElementById('date-start');
+                const dateEnd = document.getElementById('date-end');
+                if (dateStart && dates.length > 0) dateStart.value = dates[0];
+                if (dateEnd && dates.length > 0) dateEnd.value = dates[dates.length - 1];
+            }}
+
+            applyFilters();
+        }}
+
+        function updateFilterSummary(filtered, total) {{
+            const filteredCount = document.getElementById('filtered-count');
+            const totalCount = document.getElementById('total-count');
+
+            if (filteredCount) filteredCount.textContent = filtered;
+            if (totalCount) totalCount.textContent = total;
+
+            // Update active filter tags
+            const activeTags = document.getElementById('filter-active-tags');
+            if (!activeTags) return;
+
+            const tags = [];
+
+            // Status filters
+            const uncheckedStatuses = Array.from(
+                document.querySelectorAll('#status-filters input[type="checkbox"]:not(:checked)')
+            ).map(cb => cb.value);
+            if (uncheckedStatuses.length > 0) {{
+                tags.push(`Pominięte statusy: ${{uncheckedStatuses.length}}`);
+            }}
+
+            // Label filters
+            const labelFilter = document.getElementById('label-filter');
+            if (labelFilter) {{
+                const selectedLabels = Array.from(labelFilter.selectedOptions).length;
+                const totalLabels = labelFilter.options.length;
+                if (selectedLabels < totalLabels) {{
+                    tags.push(`Etykiety: ${{selectedLabels}}/${{totalLabels}}`);
+                }}
+            }}
+
+            // Date range
+            if (filterState.dateStart || filterState.dateEnd) {{
+                tags.push(`Zakres: ${{filterState.dateStart || '...'}} - ${{filterState.dateEnd || '...'}}`);
+            }}
+
+            activeTags.innerHTML = tags.map(tag =>
+                `<span class="filter-tag">${{tag}}</span>`
+            ).join('');
+        }}
+
+        // Label filter toggle functionality (legacy support)
         function toggleLabelFilter() {{
-            // For now, we'll notify the user that full dynamic switching requires page reload
-            // Future enhancement: implement full dynamic chart redrawing
-            alert('Funkcja przełączania labelek zostanie dodana w kolejnej wersji. Aktualnie raport pokazuje dane z aktywnym filtrem etykiety.');
-            // Reset checkbox to checked state
+            alert('Użyj panelu "Filtry Interaktywne" poniżej aby dynamicznie filtrować dane!');
             document.getElementById('labelFilterToggle').checked = true;
         }}
+
+        // ===== INITIALIZE ON PAGE LOAD =====
+        document.addEventListener('DOMContentLoaded', function() {{
+            if (rawIssuesData && rawIssuesData.length > 0) {{
+                initializeFilters();
+            }}
+        }});
 
         // Utworzone vs Zamknięte Timeline
         const timelineData = [
