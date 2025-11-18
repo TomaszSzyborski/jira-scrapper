@@ -321,6 +321,60 @@
         </div>
 
         <div class="card">
+            <h2>🧪 Generate Xray Test Report</h2>
+
+            <div class="info-box">
+                <h3>🧪 Test Execution Analysis</h3>
+                <p>Generate comprehensive test execution reports from Xray for Jira:</p>
+                <p>
+                    <span class="tag">Pass/Fail Rates</span>
+                    <span class="tag">Test Trends</span>
+                    <span class="tag">Duration Stats</span>
+                    <span class="tag">Defect Tracking</span>
+                </p>
+            </div>
+
+            <form id="xrayReportForm">
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="xrayProject">Project Key *</label>
+                        <input type="text" id="xrayProject" name="xrayProject" required placeholder="e.g., PROJ, DEMO">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="testPlan">Test Plan Key (optional)</label>
+                        <input type="text" id="testPlan" name="testPlan" placeholder="e.g., PROJ-123">
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="xrayStartDate">Start Date</label>
+                        <input type="date" id="xrayStartDate" name="xrayStartDate">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="xrayEndDate">End Date</label>
+                        <input type="date" id="xrayEndDate" name="xrayEndDate">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="xrayForceFetch" name="xrayForceFetch">
+                        <label for="xrayForceFetch" style="margin: 0;">Force fetch from Xray API (ignore cache)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn" id="xrayGenerateBtn">
+                    Generate Xray Test Report
+                </button>
+
+                <div class="status-message" id="xrayStatusMessage"></div>
+            </form>
+        </div>
+
+        <div class="card">
             <h2>Available Reports</h2>
             <button class="btn-small" onclick="loadReports()">🔄 Refresh List</button>
             <div id="reportsList" style="margin-top: 20px;">
@@ -472,6 +526,102 @@
             statusMsg.className = `status-message ${type}`;
             statusMsg.innerHTML = message;
             statusMsg.style.display = 'block';
+        }
+
+        function showXrayStatus(type, message) {
+            const statusMsg = document.getElementById('xrayStatusMessage');
+            statusMsg.className = `status-message ${type}`;
+            statusMsg.innerHTML = message;
+            statusMsg.style.display = 'block';
+        }
+
+        // Handle Xray form submission
+        document.getElementById('xrayReportForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const btn = document.getElementById('xrayGenerateBtn');
+            const statusMsg = document.getElementById('xrayStatusMessage');
+
+            // Disable button
+            btn.disabled = true;
+            btn.innerHTML = 'Generating... <span class="loading-spinner"></span>';
+
+            // Get form data
+            const formData = {
+                project: document.getElementById('xrayProject').value,
+                start_date: document.getElementById('xrayStartDate').value || null,
+                end_date: document.getElementById('xrayEndDate').value || null,
+                test_plan: document.getElementById('testPlan').value || null,
+                force_fetch: document.getElementById('xrayForceFetch').checked
+            };
+
+            try {
+                // Generate Xray report
+                const response = await fetch(`${API_BASE}/xray/reports/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate Xray report');
+                }
+
+                const result = await response.json();
+
+                // Show status message
+                showXrayStatus('info', 'Xray report generation started. Polling for status...');
+
+                // Poll for status
+                pollXrayReportStatus(result.report_id);
+
+            } catch (error) {
+                showXrayStatus('error', `Error: ${error.message}`);
+                btn.disabled = false;
+                btn.innerHTML = 'Generate Xray Test Report';
+            }
+        });
+
+        async function pollXrayReportStatus(reportId) {
+            const btn = document.getElementById('xrayGenerateBtn');
+            const maxAttempts = 60; // 5 minutes max
+            let attempts = 0;
+
+            const interval = setInterval(async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch(`${API_BASE}/reports/status/${reportId}`);
+                    const status = await response.json();
+
+                    showXrayStatus('info', `${status.message}...`);
+
+                    if (status.status === 'completed') {
+                        clearInterval(interval);
+                        showXrayStatus('success', `Xray test report generated successfully! <a href="${status.report_url}" target="_blank" style="color: #166534; text-decoration: underline;">View Report</a>`);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Xray Test Report';
+                        loadReports();
+                    } else if (status.status === 'failed') {
+                        clearInterval(interval);
+                        showXrayStatus('error', status.message);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Xray Test Report';
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        showXrayStatus('error', 'Timeout waiting for Xray report generation');
+                        btn.disabled = false;
+                        btn.innerHTML = 'Generate Xray Test Report';
+                    }
+                } catch (error) {
+                    clearInterval(interval);
+                    showXrayStatus('error', `Error polling status: ${error.message}`);
+                    btn.disabled = false;
+                    btn.innerHTML = 'Generate Xray Test Report';
+                }
+            }, 5000); // Poll every 5 seconds
         }
     </script>
 </body>

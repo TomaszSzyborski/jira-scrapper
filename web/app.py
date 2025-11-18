@@ -22,6 +22,9 @@ import uvicorn
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from jira_analyzer import JiraFetcher, FlowAnalyzer, ReportGenerator
+from jira_analyzer.xray_fetcher import XrayFetcher
+from jira_analyzer.xray_analyzer import XrayAnalyzer
+from jira_analyzer.xray_reporter import XrayReportGenerator
 
 
 app = FastAPI(
@@ -48,6 +51,15 @@ class ReportRequest(BaseModel):
     end_date: Optional[str] = None
     label: Optional[str] = None
     issue_types: Optional[List[str]] = None
+    force_fetch: bool = False
+
+
+class XrayReportRequest(BaseModel):
+    """Request model for generating an Xray test report."""
+    project: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    test_plan: Optional[str] = None
     force_fetch: bool = False
 
 
@@ -242,6 +254,114 @@ async def download_report(filename: str):
         media_type="application/octet-stream",
         filename=filename
     )
+
+
+# ===== XRAY TEST EXECUTION ENDPOINTS =====
+
+@app.post("/api/xray/reports/generate", response_model=ReportStatus)
+async def generate_xray_report(report_req: XrayReportRequest, background_tasks: BackgroundTasks):
+    """
+    Generate an Xray test execution report.
+
+    This endpoint initiates Xray report generation as a background task.
+    """
+    # Generate report ID
+    report_id = f"xray_{report_req.project}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Create status entry
+    status = ReportStatus(
+        report_id=report_id,
+        status="pending",
+        message="Xray test report generation queued",
+        created_at=datetime.now().isoformat()
+    )
+    report_statuses[report_id] = status.dict()
+
+    # Add background task
+    background_tasks.add_task(
+        generate_xray_report_task,
+        report_id,
+        report_req
+    )
+
+    return status
+
+
+async def generate_xray_report_task(report_id: str, report_req: XrayReportRequest):
+    """Background task to generate an Xray test report."""
+    try:
+        # Update status
+        report_statuses[report_id]["status"] = "generating"
+        report_statuses[report_id]["message"] = "Fetching test executions from Xray..."
+
+        # Cache file path
+        cache_file = CACHE_DIR / f"xray_{report_req.project}_test_executions.json"
+
+        # Check cache or fetch
+        if cache_file.exists() and not report_req.force_fetch:
+            report_statuses[report_id]["message"] = "Using cached Xray data..."
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cached_data = json.load(f)
+            executions = cached_data['executions']
+        else:
+            report_statuses[report_id]["message"] = "Fetching from Xray API..."
+            fetcher = XrayFetcher()
+            executions = fetcher.fetch_test_executions(
+                project=report_req.project,
+                start_date=report_req.start_date,
+                end_date=report_req.end_date,
+                test_plan=report_req.test_plan
+            )
+
+            # Save to cache
+            cache_data = {
+                'metadata': {
+                    'project': report_req.project,
+                    'start_date': report_req.start_date,
+                    'end_date': report_req.end_date,
+                    'test_plan': report_req.test_plan,
+                    'fetched_at': datetime.now().isoformat(),
+                    'total_executions': len(executions)
+                },
+                'executions': executions
+            }
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, indent=2, ensure_ascii=False)
+
+        # Analyze test executions
+        report_statuses[report_id]["message"] = "Analyzing test executions..."
+        analyzer = XrayAnalyzer(
+            executions,
+            start_date=report_req.start_date,
+            end_date=report_req.end_date
+        )
+        test_metrics = analyzer.calculate_test_metrics()
+
+        # Generate report
+        report_statuses[report_id]["message"] = "Generating HTML report..."
+        report_filename = f"{report_id}_xray_test_report.html"
+        report_path = REPORTS_DIR / report_filename
+
+        metadata = {
+            'project': report_req.project,
+            'fetched_at': datetime.now().isoformat()
+        }
+
+        generator = XrayReportGenerator(
+            metadata,
+            test_metrics,
+            jira_url=os.getenv('JIRA_URL')
+        )
+        generator.generate_html(str(report_path))
+
+        # Update status
+        report_statuses[report_id]["status"] = "completed"
+        report_statuses[report_id]["message"] = "Xray test report generated successfully"
+        report_statuses[report_id]["report_url"] = f"/api/reports/view/{report_id}/{report_filename}"
+
+    except Exception as e:
+        report_statuses[report_id]["status"] = "failed"
+        report_statuses[report_id]["message"] = f"Error: {str(e)}"
 
 
 if __name__ == "__main__":
