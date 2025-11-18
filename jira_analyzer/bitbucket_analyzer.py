@@ -65,6 +65,10 @@ class BitbucketAnalyzer:
             - pr_metrics: Pull request metrics
             - activity_summary: Summary of repository activity
         """
+        # Calculate enhanced commit and PR metrics
+        commit_activity = self.calculate_commit_activity_metrics()
+        pr_detailed = self.calculate_detailed_pr_metrics()
+
         metrics = {
             'total_commits': len(self.commits),
             'total_pull_requests': len(self.pull_requests),
@@ -76,7 +80,9 @@ class BitbucketAnalyzer:
             'date_range': {
                 'start': self.start_date,
                 'end': self.end_date
-            }
+            },
+            'commit_activity': commit_activity,
+            'pr_detailed_metrics': pr_detailed,
         }
 
         return metrics
@@ -339,3 +345,162 @@ class BitbucketAnalyzer:
         """
         contributor_stats = self._calculate_contributor_stats()
         return contributor_stats[:limit]
+
+    def calculate_commit_activity_metrics(self) -> dict:
+        """
+        Calculate detailed commit activity metrics.
+
+        Calculates:
+        - Commits per day/week
+        - Distribution of commits among team members
+        - Average commit size (lines changed) - Note: requires diff data
+        - Commit message analysis
+
+        Returns:
+            Dictionary containing commit activity metrics
+        """
+        # Commits per day and week
+        commits_per_day = self.get_commit_frequency('daily')
+        commits_per_week = self.get_commit_frequency('weekly')
+
+        # Distribution among team members
+        contributor_distribution = {}
+        total_commits = len(self.commits)
+
+        for commit in self.commits:
+            email = commit.get('author_email', 'Unknown').lower()
+            contributor_distribution[email] = contributor_distribution.get(email, 0) + 1
+
+        # Calculate percentages
+        contributor_percentages = {}
+        for email, count in contributor_distribution.items():
+            percentage = (count / total_commits * 100) if total_commits > 0 else 0
+            contributor_percentages[email] = {
+                'commits': count,
+                'percentage': round(percentage, 2)
+            }
+
+        # Sort by commit count
+        sorted_contributors = sorted(
+            contributor_percentages.items(),
+            key=lambda x: x[1]['commits'],
+            reverse=True
+        )
+
+        # Analyze commit messages for keywords
+        commit_types = defaultdict(int)
+        for commit in self.commits:
+            message = commit.get('message', '').lower()
+
+            # Simple categorization based on common prefixes
+            if message.startswith('fix') or 'fix:' in message:
+                commit_types['fix'] += 1
+            elif message.startswith('feat') or 'feature:' in message:
+                commit_types['feature'] += 1
+            elif message.startswith('refactor') or 'refactor:' in message:
+                commit_types['refactor'] += 1
+            elif message.startswith('docs') or 'docs:' in message:
+                commit_types['docs'] += 1
+            elif message.startswith('test') or 'test:' in message:
+                commit_types['test'] += 1
+            elif message.startswith('chore') or 'chore:' in message:
+                commit_types['chore'] += 1
+            else:
+                commit_types['other'] += 1
+
+        return {
+            'commits_per_day': commits_per_day,
+            'commits_per_week': commits_per_week,
+            'contributor_distribution': dict(sorted_contributors),
+            'commit_types': dict(commit_types),
+            'avg_commits_per_contributor': round(total_commits / len(contributor_distribution), 2) if contributor_distribution else 0,
+        }
+
+    def calculate_detailed_pr_metrics(self) -> dict:
+        """
+        Calculate detailed pull request metrics.
+
+        Calculates:
+        - Average review time
+        - Comments per PR (if available)
+        - Accept/reject ratio
+        - Bottleneck analysis (reviewers with longest review times)
+
+        Returns:
+            Dictionary containing detailed PR metrics
+        """
+        if not self.pull_requests:
+            return {
+                'avg_review_time_hours': 0,
+                'avg_comments_per_pr': 0,
+                'accept_reject_ratio': 0,
+                'reviewer_bottlenecks': [],
+                'pr_size_distribution': {},
+            }
+
+        review_times = []
+        total_comments = 0
+        accepted_count = 0
+        rejected_count = 0
+        reviewer_times = defaultdict(list)
+
+        for pr in self.pull_requests:
+            created_ts = pr.get('created_timestamp', 0)
+            closed_ts = pr.get('closed_timestamp')
+            state = pr.get('state', '').upper()
+
+            # Calculate review time
+            if created_ts and closed_ts:
+                review_time_hours = (closed_ts - created_ts) / (1000 * 3600)
+                review_times.append(review_time_hours)
+
+                # Track review times by reviewer
+                reviewers = pr.get('reviewers', [])
+                for reviewer in reviewers:
+                    reviewer_email = reviewer.get('email', 'Unknown')
+                    reviewer_times[reviewer_email].append(review_time_hours)
+
+            # Count accepted/rejected
+            if state == 'MERGED':
+                accepted_count += 1
+            elif state == 'DECLINED':
+                rejected_count += 1
+
+            # Comments per PR (placeholder - would need additional API call)
+            # For now, count reviewers as proxy for engagement
+            total_comments += len(pr.get('reviewers', []))
+
+        # Calculate averages
+        avg_review_time = sum(review_times) / len(review_times) if review_times else 0
+        avg_comments = total_comments / len(self.pull_requests) if self.pull_requests else 0
+
+        # Accept/reject ratio
+        accept_reject_ratio = (accepted_count / rejected_count) if rejected_count > 0 else accepted_count
+
+        # Find bottlenecks (reviewers with longest average review times)
+        reviewer_avg_times = []
+        for reviewer, times in reviewer_times.items():
+            avg_time = sum(times) / len(times)
+            reviewer_avg_times.append({
+                'reviewer': reviewer,
+                'avg_review_time_hours': round(avg_time, 2),
+                'total_reviews': len(times)
+            })
+
+        # Sort by longest review time
+        reviewer_bottlenecks = sorted(
+            reviewer_avg_times,
+            key=lambda x: x['avg_review_time_hours'],
+            reverse=True
+        )[:5]  # Top 5 slowest reviewers
+
+        return {
+            'avg_review_time_hours': round(avg_review_time, 2),
+            'median_review_time_hours': round(sorted(review_times)[len(review_times)//2], 2) if review_times else 0,
+            'avg_comments_per_pr': round(avg_comments, 2),
+            'accepted_count': accepted_count,
+            'rejected_count': rejected_count,
+            'accept_reject_ratio': round(accept_reject_ratio, 2),
+            'reviewer_bottlenecks': reviewer_bottlenecks,
+            'total_review_hours': round(sum(review_times), 2),
+        }

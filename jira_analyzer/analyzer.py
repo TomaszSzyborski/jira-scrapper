@@ -582,6 +582,10 @@ class FlowAnalyzer:
         # Calculate timeline metrics
         timeline = self.calculate_timeline_metrics()
 
+        # Calculate additional metrics
+        throughput = self.calculate_throughput_metrics()
+        quality_wip = self.calculate_quality_and_wip_metrics()
+
         return {
             'total_transitions': len(df),
             'unique_statuses': len(all_statuses),
@@ -591,4 +595,141 @@ class FlowAnalyzer:
             'time_in_status': time_in_status,
             'timeline': timeline,
             'total_issues': len(self.filtered_issues),
+            'throughput': throughput,
+            'quality_and_wip': quality_wip,
+        }
+
+    def calculate_throughput_metrics(self) -> dict:
+        """
+        Calculate throughput metrics.
+
+        Calculates:
+        - Number of closed tickets per day/week
+        - Average lead time (time from creation to resolution)
+        - Average time in each status
+
+        Returns:
+            Dictionary containing throughput metrics
+        """
+        from collections import defaultdict
+        from datetime import datetime, timedelta
+
+        closed_by_day = defaultdict(int)
+        closed_by_week = defaultdict(int)
+        lead_times = []
+        time_per_status = defaultdict(list)
+
+        for issue in self.filtered_issues:
+            # Check if issue is closed/resolved
+            status = issue.get('status', '').lower()
+            resolution_date = issue.get('resolutiondate')
+            created = issue.get('created', '')
+
+            if resolution_date and status in ['done', 'closed', 'resolved', 'rejected']:
+                # Parse dates
+                try:
+                    res_date = datetime.fromisoformat(resolution_date.replace('Z', '+00:00'))
+                    res_day = res_date.strftime('%Y-%m-%d')
+                    res_week = res_date.strftime('%Y-W%W')
+
+                    closed_by_day[res_day] += 1
+                    closed_by_week[res_week] += 1
+
+                    # Calculate lead time
+                    if created:
+                        created_date = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                        lead_time_days = (res_date - created_date).total_seconds() / 86400
+                        lead_times.append(lead_time_days)
+
+                except (ValueError, AttributeError):
+                    pass
+
+        # Calculate average lead time
+        avg_lead_time = sum(lead_times) / len(lead_times) if lead_times else 0
+
+        # Get average time per status from existing calculation
+        time_in_status_data = self.calculate_time_in_status()
+
+        return {
+            'closed_per_day': dict(sorted(closed_by_day.items())),
+            'closed_per_week': dict(sorted(closed_by_week.items())),
+            'total_closed': sum(closed_by_day.values()),
+            'avg_lead_time_days': round(avg_lead_time, 2),
+            'median_lead_time_days': round(sorted(lead_times)[len(lead_times)//2], 2) if lead_times else 0,
+            'avg_time_per_status': time_in_status_data,
+        }
+
+    def calculate_quality_and_wip_metrics(self) -> dict:
+        """
+        Calculate quality and work-in-progress metrics.
+
+        Calculates:
+        - Number of tickets in each status (WIP)
+        - Reopen rate (tickets moved from closed back to open states)
+        - Priority distribution
+        - Defect ratio (bugs vs stories vs dev tasks)
+
+        Returns:
+            Dictionary containing quality and WIP metrics
+        """
+        from collections import defaultdict
+
+        tickets_per_status = defaultdict(int)
+        priority_distribution = defaultdict(int)
+        issue_type_counts = defaultdict(int)
+        reopened_count = 0
+        total_closures = 0
+
+        for issue in self.filtered_issues:
+            # Current status
+            status = issue.get('status', 'Unknown')
+            tickets_per_status[status] += 1
+
+            # Priority
+            priority = issue.get('priority', 'None')
+            priority_distribution[priority] += 1
+
+            # Issue type
+            issue_type = issue.get('issue_type', 'Unknown')
+            issue_type_counts[issue_type] += 1
+
+            # Check for reopens in changelog
+            changelog = issue.get('changelog', [])
+            was_closed = False
+            for change in changelog:
+                from_status = change.get('from_status', '').lower()
+                to_status = change.get('to_status', '').lower()
+
+                # Check if moved to closed state
+                if to_status in ['done', 'closed', 'resolved', 'rejected']:
+                    was_closed = True
+                    total_closures += 1
+
+                # Check if reopened after being closed
+                if was_closed and from_status in ['done', 'closed', 'resolved', 'rejected']:
+                    if to_status not in ['done', 'closed', 'resolved', 'rejected']:
+                        reopened_count += 1
+
+        # Calculate reopen rate
+        reopen_rate = (reopened_count / total_closures * 100) if total_closures > 0 else 0
+
+        # Calculate defect ratio
+        bugs = issue_type_counts.get('Bug', 0) + issue_type_counts.get('Błąd w programie', 0)
+        stories = issue_type_counts.get('Story', 0)
+        dev_tasks = issue_type_counts.get('Zadanie Dev', 0) + issue_type_counts.get('Task', 0)
+        total_non_bugs = stories + dev_tasks
+
+        defect_ratio = (bugs / total_non_bugs * 100) if total_non_bugs > 0 else 0
+
+        return {
+            'tickets_per_status': dict(tickets_per_status),
+            'priority_distribution': dict(priority_distribution),
+            'issue_type_distribution': dict(issue_type_counts),
+            'reopened_count': reopened_count,
+            'total_closures': total_closures,
+            'reopen_rate_percent': round(reopen_rate, 2),
+            'defect_ratio_percent': round(defect_ratio, 2),
+            'bugs_count': bugs,
+            'stories_count': stories,
+            'dev_tasks_count': dev_tasks,
         }
