@@ -38,7 +38,7 @@ class ReportGenerator:
         >>> print(f"Report saved to {report_path}")
     """
 
-    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None, jira_url: str = None, label: str = None, flow_metrics_no_label: dict = None, all_issues: list = None):
+    def __init__(self, metadata: dict, flow_metrics: dict, start_date: str = None, end_date: str = None, jira_url: str = None, label: str = None, flow_metrics_no_label: dict = None, all_issues: list = None, current_snapshot: dict = None):
         """
         Initialize report generator.
 
@@ -53,6 +53,7 @@ class ReportGenerator:
             label: Optional label filter that was applied
             flow_metrics_no_label: Optional metrics calculated without label filter (for comparison/toggle)
             all_issues: Optional list of ALL raw issues for client-side filtering (enables interactive mode)
+            current_snapshot: Optional dict of current open issues grouped by type (statusCategory != Done)
         """
         self.metadata = metadata
         self.flow_metrics = flow_metrics
@@ -62,6 +63,7 @@ class ReportGenerator:
         self.label = label
         self.flow_metrics_no_label = flow_metrics_no_label
         self.all_issues = all_issues  # For interactive filtering
+        self.current_snapshot = current_snapshot  # For current state visualization
 
     def _calculate_trend(self, x_values: list, y_values: list) -> list:
         """
@@ -250,6 +252,104 @@ class ReportGenerator:
                     <div id="filter-active-tags" class="active-filters-tags"></div>
                 </div>
             </div>
+        </div>
+        '''
+
+    def _generate_current_snapshot_section(self) -> str:
+        """
+        Generate HTML for current state snapshot visualization.
+
+        Creates status distribution charts for each issue type showing
+        what's currently open/in-progress (statusCategory != Done).
+
+        Returns:
+            HTML string with current snapshot charts, or empty if no snapshot data
+        """
+        if not self.current_snapshot:
+            return ""
+
+        sections = []
+        chart_id = 0
+
+        for issue_type, issues in self.current_snapshot.items():
+            if not issues:
+                continue
+
+            # Count issues by status
+            status_counts = {}
+            status_priorities = {}  # Track priority distribution per status
+
+            for issue in issues:
+                status = issue.get('status', 'Unknown')
+                priority = issue.get('priority', 'None')
+
+                status_counts[status] = status_counts.get(status, 0) + 1
+
+                if status not in status_priorities:
+                    status_priorities[status] = {}
+                status_priorities[status][priority] = status_priorities[status].get(priority, 0) + 1
+
+            # Prepare data for charts
+            statuses = list(status_counts.keys())
+            counts = [status_counts[s] for s in statuses]
+
+            chart_id += 1
+
+            # Create status distribution chart
+            chart_html = f'''
+        <div class="chart-container">
+            <div class="chart-title">📸 Stan Aktualny: {issue_type} (statusCategory != Done)</div>
+            <div class="chart-subtitle">Łącznie {len(issues)} otwartych zadań - Podział według statusu</div>
+            <div id="snapshot-chart-{chart_id}"></div>
+        </div>
+        <script>
+        ''' + '''
+            const snapshotData''' + str(chart_id) + ''' = [{
+                x: ''' + json.dumps(statuses) + ''',
+                y: ''' + json.dumps(counts) + ''',
+                type: 'bar',
+                marker: {
+                    color: '#667eea',
+                    line: {
+                        color: '#764ba2',
+                        width: 1.5
+                    }
+                },
+                text: ''' + json.dumps(counts) + ''',
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>Liczba: %{y}<extra></extra>'
+            }];
+
+            const snapshotLayout''' + str(chart_id) + ''' = {
+                xaxis: {
+                    title: 'Status',
+                    tickangle: -45
+                },
+                yaxis: {
+                    title: 'Liczba Zadań'
+                },
+                height: 400,
+                showlegend: false,
+                margin: { b: 120 }
+            };
+
+            Plotly.newPlot('snapshot-chart-''' + str(chart_id) + '''', snapshotData''' + str(chart_id) + ''', snapshotLayout''' + str(chart_id) + ''', {responsive: true});
+        </script>
+            '''
+            sections.append(chart_html)
+
+        if not sections:
+            return ""
+
+        # Wrap all sections in a container
+        joined_sections = ''.join(sections)
+        return f'''
+        <div class="snapshot-section">
+            <div class="header" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <h2 style="color: #2d3748; margin-bottom: 10px;">📸 Stan Aktualny (TODAY)</h2>
+                <p style="color: #718096; margin: 0;">Snapshot zadań otwartych/w trakcie (statusCategory != Done) na dzień dzisiejszy</p>
+            </div>
+            {joined_sections}
         </div>
         '''
 
@@ -997,6 +1097,8 @@ class ReportGenerator:
         </div>
 
         {self._generate_interactive_filter_panel()}
+
+        {self._generate_current_snapshot_section()}
 
         <div class="stats">
             <div class="stat-card">

@@ -154,11 +154,12 @@ class JiraFetcher:
 
         Args:
             project: Jira project key
-            start_date: Optional start date (not used in JQL, for compatibility)
-            end_date: Optional end date (not used in JQL, for compatibility)
+            start_date: Optional start date (used in incremental mode for delta fetch)
+            end_date: Optional end date (used in incremental mode for delta fetch)
             batch_size: Number of issues to fetch per request (default: 100)
             issue_types: List of issue types to fetch (e.g., ['Bug', 'Story', 'Task'])
                         If None, defaults to bugs only
+            incremental: If True, fetches only issues created/updated since start_date
 
         Returns:
             List of issue dictionaries with changelog data
@@ -167,8 +168,11 @@ class JiraFetcher:
             >>> fetcher = JiraFetcher()
             >>> issues = fetcher.fetch_issues('PROJ', issue_types=['Story'], batch_size=50)
             >>> print(f"Fetched {len(issues)} stories")
+
+            >>> # Incremental fetch - only new/updated since 2024-01-01
+            >>> issues = fetcher.fetch_issues('PROJ', start_date='2024-01-01', incremental=True)
         """
-        jql = self.build_jql(project, start_date, end_date, issue_types)
+        jql = self.build_jql(project, start_date, end_date, issue_types, incremental)
         print(f"\nJQL Query: {jql}")
 
         issues = []
@@ -201,6 +205,90 @@ class JiraFetcher:
 
         return issues
 
+    def fetch_current_snapshot(
+        self,
+        project: str,
+        issue_types: Optional[list] = None,
+        label: Optional[str] = None,
+        batch_size: int = 100,
+    ) -> dict:
+        """
+        Fetch current state snapshot of open issues (statusCategory != Done).
+
+        This creates a snapshot of what's currently open/in-progress for TODAY.
+        Useful for current workload visualization and status distribution charts.
+
+        Args:
+            project: Jira project key
+            issue_types: List of issue types to fetch
+            label: Optional label filter
+            batch_size: Number of issues to fetch per request (default: 100)
+
+        Returns:
+            Dictionary with issues grouped by type:
+            {
+                'Bug': [...],
+                'Story': [...],
+                'Zadanie Dev': [...]
+            }
+
+        Example:
+            >>> fetcher = JiraFetcher()
+            >>> snapshot = fetcher.fetch_current_snapshot('PROJ', label='Sprint-5')
+            >>> print(f"Open bugs: {len(snapshot.get('Bug', []))}")
+        """
+        # Default to common issue types if none specified
+        if issue_types is None:
+            issue_types = ['Bug', 'Błąd w programie', 'Story', 'Zadanie Dev']
+
+        results = {}
+
+        for issue_type in issue_types:
+            # Build JQL for current open issues
+            jql_parts = [
+                f'project = "{project}"',
+                f'issuetype = "{issue_type}"',
+                'statusCategory != Done'
+            ]
+
+            if label:
+                jql_parts.append(f'labels = "{label}"')
+
+            jql = " AND ".join(jql_parts)
+            jql += " ORDER BY status ASC, priority DESC"
+
+            print(f"\n[Current Snapshot - {issue_type}] JQL: {jql}")
+
+            issues = []
+            start_at = 0
+
+            while True:
+                batch = self.jira.search_issues(
+                    jql,
+                    startAt=start_at,
+                    maxResults=batch_size,
+                    expand='changelog',
+                    fields='*all'
+                )
+
+                if not batch:
+                    break
+
+                for issue in batch:
+                    issues.append(self._issue_to_dict(issue))
+
+                print(f"  Found {len(batch)} {issue_type} issues (total: {len(issues)})")
+
+                if len(batch) < batch_size:
+                    break
+
+                start_at += batch_size
+
+            if issues:
+                results[issue_type] = issues
+
+        return results
+
     def _issue_to_dict(self, issue) -> dict:
         """
         Convert Jira issue object to dictionary.
@@ -231,12 +319,16 @@ class JiraFetcher:
                             'to_string': item.toString,
                         })
 
+        issue_type = fields.get('issuetype', {}).get('name', '')
+
         return {
             'key': issue.key,
             'id': issue.id,
             'summary': fields.get('summary', ''),
             'status': fields.get('status', {}).get('name', ''),
-            'issue_type': fields.get('issuetype', {}).get('name', ''),
+            'statusCategory': fields.get('status', {}).get('statusCategory', {}).get('name', ''),
+            'issue_type': issue_type,  # Legacy field name
+            'type': issue_type,  # Consistent field name for interactive filtering
             'priority': fields.get('priority', {}).get('name', '') if fields.get('priority') else '',
             'assignee': fields.get('assignee', {}).get('displayName', '') if fields.get('assignee') else '',
             'reporter': fields.get('reporter', {}).get('displayName', '') if fields.get('reporter') else '',

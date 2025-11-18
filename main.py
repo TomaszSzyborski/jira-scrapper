@@ -138,6 +138,18 @@ Note:
         help='HTML report output file (default: jira_flow_report.html)'
     )
 
+    parser.add_argument(
+        '--incremental', '-i',
+        action='store_true',
+        help='Incremental fetch: only fetch issues created/updated since last fetch (uses cache timestamp)'
+    )
+
+    parser.add_argument(
+        '--current-snapshot',
+        action='store_true',
+        help='Fetch current state snapshot (statusCategory != Done) and add to report'
+    )
+
     return parser.parse_args()
 
 
@@ -162,6 +174,73 @@ def validate_date(date_string: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def merge_issues(existing_issues: list, new_issues: list) -> list:
+    """
+    Merge new/updated issues with existing cached issues.
+
+    Creates a dictionary keyed by issue ID, with new issues overwriting
+    existing ones if they have been updated.
+
+    Args:
+        existing_issues: List of issues from cache
+        new_issues: List of newly fetched issues
+
+    Returns:
+        Merged list of issues (new issues override old ones)
+
+    Example:
+        >>> existing = [{'key': 'PROJ-1', 'id': '1', 'updated': '2024-01-01'}]
+        >>> new = [{'key': 'PROJ-1', 'id': '1', 'updated': '2024-01-02'}]
+        >>> merged = merge_issues(existing, new)
+        >>> len(merged)
+        1
+        >>> merged[0]['updated']
+        '2024-01-02'
+    """
+    # Create dict keyed by issue ID
+    issue_dict = {issue['id']: issue for issue in existing_issues}
+
+    # Update with new/updated issues
+    for issue in new_issues:
+        issue_dict[issue['id']] = issue
+
+    # Return as list, sorted by created date
+    return sorted(issue_dict.values(), key=lambda x: x.get('created', ''))
+
+
+def get_last_update_date(issues: list) -> str:
+    """
+    Get the most recent updated date from a list of issues.
+
+    Args:
+        issues: List of issue dictionaries
+
+    Returns:
+        ISO date string (YYYY-MM-DD) of the most recent update,
+        or None if no issues
+
+    Example:
+        >>> issues = [
+        ...     {'updated': '2024-01-01T10:00:00.000+0000'},
+        ...     {'updated': '2024-01-05T15:30:00.000+0000'}
+        ... ]
+        >>> get_last_update_date(issues)
+        '2024-01-05'
+    """
+    if not issues:
+        return None
+
+    # Get all update dates and find the max
+    update_dates = [issue.get('updated', '') for issue in issues if issue.get('updated')]
+
+    if not update_dates:
+        return None
+
+    # Take the date part only (YYYY-MM-DD)
+    max_date = max(update_dates)
+    return max_date[:10] if max_date else None
 
 
 def main():
@@ -218,7 +297,6 @@ def main():
     # Check cache
     if output_path.exists() and not args.force_fetch:
         print(f"\nCache found at {output_path}")
-        print("Use --force-fetch to refresh from API")
 
         with open(output_path, 'r', encoding='utf-8') as f:
             cached_data = json.load(f)
@@ -233,6 +311,62 @@ def main():
             print(f"  End date: {cached_data['metadata']['end_date']}")
         if cached_data['metadata'].get('label'):
             print(f"  Label: {cached_data['metadata']['label']}")
+
+        # INCREMENTAL FETCH: Fetch only new/updated issues since last fetch
+        if args.incremental:
+            print("\n" + "=" * 60)
+            print("INCREMENTAL FETCH MODE")
+            print("=" * 60)
+
+            # Get the most recent update date from cached issues
+            last_update = get_last_update_date(cached_data['issues'])
+
+            if last_update:
+                print(f"Last cached update: {last_update}")
+                print(f"Fetching issues created/updated since {last_update}...")
+
+                try:
+                    fetcher = JiraFetcher()
+
+                    # Fetch only new/updated issues
+                    new_issues = fetcher.fetch_issues(
+                        project=args.project,
+                        start_date=last_update,
+                        end_date=None,
+                        batch_size=args.batch_size,
+                        issue_types=args.issue_types,
+                        incremental=True  # Use incremental JQL
+                    )
+
+                    print(f"\nFetched {len(new_issues)} new/updated issues")
+
+                    # Merge with cached issues
+                    merged_issues = merge_issues(cached_data['issues'], new_issues)
+
+                    print(f"Total issues after merge: {len(merged_issues)}")
+
+                    # Update cached data
+                    cached_data['issues'] = merged_issues
+                    cached_data['metadata']['fetched_at'] = datetime.now().isoformat()
+                    cached_data['metadata']['last_incremental_fetch'] = datetime.now().isoformat()
+                    cached_data['metadata']['total_issues'] = len(merged_issues)
+
+                    # Save updated cache
+                    print(f"\nUpdating cache at {output_path}...")
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        json.dump(cached_data, f, indent=2, ensure_ascii=False)
+
+                    print("Cache updated successfully!")
+                    print("=" * 60)
+
+                except Exception as e:
+                    print(f"\nIncremental fetch failed: {e}")
+                    print("Using cached data as-is")
+            else:
+                print("\nNo update date found in cache, skipping incremental fetch")
+                print("Use --force-fetch for a full refresh")
+        else:
+            print("Use --force-fetch to refresh from API or --incremental for delta fetch")
 
         # Generate report if requested
         if args.report:
@@ -269,6 +403,32 @@ def main():
                 flow_metrics_no_label = analyzer_no_label.calculate_flow_metrics()
                 print(f"  Total bugs (no label filter): {flow_metrics_no_label.get('total_issues', 0)}")
 
+            # Fetch current state snapshot if requested
+            current_snapshot = None
+            if args.current_snapshot:
+                print(f"\n" + "=" * 60)
+                print("FETCHING CURRENT STATE SNAPSHOT")
+                print("=" * 60)
+
+                try:
+                    fetcher = JiraFetcher()
+                    current_snapshot = fetcher.fetch_current_snapshot(
+                        project=args.project,
+                        issue_types=args.issue_types,
+                        label=args.label
+                    )
+
+                    total_open = sum(len(issues) for issues in current_snapshot.values())
+                    print(f"\nCurrent state summary (statusCategory != Done):")
+                    for issue_type, issues in current_snapshot.items():
+                        print(f"  {issue_type}: {len(issues)} open")
+                    print(f"  Total open issues: {total_open}")
+                    print("=" * 60)
+
+                except Exception as e:
+                    print(f"\nCurrent snapshot fetch failed: {e}")
+                    print("Continuing without snapshot...")
+
             # Create simplified metadata (only project and fetched_at from cache)
             report_metadata = {
                 'project': cached_data['metadata']['project'],
@@ -282,7 +442,8 @@ def main():
                 jira_url=os.getenv('JIRA_URL'),
                 label=args.label,
                 flow_metrics_no_label=flow_metrics_no_label,
-                all_issues=cached_data['issues']  # Pass all issues for interactive filtering
+                all_issues=cached_data['issues'],  # Pass all issues for interactive filtering
+                current_snapshot=current_snapshot  # Pass current state snapshot
             )
             report_path = generator.generate_html(args.report_output)
 
@@ -372,6 +533,31 @@ def main():
                 flow_metrics_no_label = analyzer_no_label.calculate_flow_metrics()
                 print(f"  Total bugs (no label filter): {flow_metrics_no_label.get('total_issues', 0)}")
 
+            # Fetch current state snapshot if requested
+            current_snapshot = None
+            if args.current_snapshot:
+                print(f"\n" + "=" * 60)
+                print("FETCHING CURRENT STATE SNAPSHOT")
+                print("=" * 60)
+
+                try:
+                    current_snapshot = fetcher.fetch_current_snapshot(
+                        project=args.project,
+                        issue_types=args.issue_types,
+                        label=args.label
+                    )
+
+                    total_open = sum(len(issues_list) for issues_list in current_snapshot.values())
+                    print(f"\nCurrent state summary (statusCategory != Done):")
+                    for issue_type, issues_list in current_snapshot.items():
+                        print(f"  {issue_type}: {len(issues_list)} open")
+                    print(f"  Total open issues: {total_open}")
+                    print("=" * 60)
+
+                except Exception as e:
+                    print(f"\nCurrent snapshot fetch failed: {e}")
+                    print("Continuing without snapshot...")
+
             # Create simplified metadata (only project and fetched_at, not dates)
             report_metadata = {
                 'project': output_data['metadata']['project'],
@@ -385,7 +571,8 @@ def main():
                 jira_url=fetcher.jira_url,
                 label=args.label,
                 flow_metrics_no_label=flow_metrics_no_label,
-                all_issues=issues  # Pass all issues for interactive filtering
+                all_issues=issues,  # Pass all issues for interactive filtering
+                current_snapshot=current_snapshot  # Pass current state snapshot
             )
             report_path = generator.generate_html(args.report_output)
 
