@@ -1,0 +1,50 @@
+{
+  "id": 12345,
+  "status": {
+    "id": 1,
+    "name": "PASS",
+    "description": "Test passed successfully",
+    "color": "00CC00",
+    "type": "FINAL"
+  },
+  "testKey": "PROJ-401",
+  "testExecKey": "PROJ-201",
+  "startedOn": "2024-01-15T10:30:00.000Z",
+  "finishedOn": "2024-01-15T10:32:30.000Z",
+  "executedBy": "qa.tester",
+  "assignee": "qa.tester",
+  "comment": "All test steps passed successfully. Login flow working as expected.",
+  "defects": [],
+  "examples": [],
+  "steps": [
+    {
+      "id": 1,
+      "status": {
+        "id": 1,
+        "name": "PASS"
+      },
+      "comment": "User navigated to login page",
+      "actualResult": "Login page displayed correctly"
+    },
+    {
+      "id": 2,
+      "status": {
+        "id": 1,
+        "name": "PASS"
+      },
+      "comment": "Entered valid credentials",
+      "actualResult": "Credentials accepted"
+    },
+    {
+      "id": 3,
+      "status": {
+        "id": 1,
+        "name": "PASS"
+      },
+      "comment": "Clicked login button",
+      "actualResult": "Successfully logged in and redirected to dashboard"
+    }
+  ],
+  "evidences": [],
+  "customFields": {}
+}

@@ -1,0 +1,275 @@
+{
+  "size": 3,
+  "limit": 100,
+  "isLastPage": true,
+  "values": [
+    {
+      "id": 1,
+      "version": 5,
+      "title": "Fix authentication bug",
+      "description": "This PR fixes the authentication issue where users couldn't log in with valid credentials.\n\n## Changes\n- Updated JWT token validation logic\n- Added proper error handling for expired tokens\n- Improved logging for debugging\n\n## Testing\n- ✅ Manual testing with valid/invalid credentials\n- ✅ Unit tests for token validation\n- ✅ Integration tests for login flow",
+      "state": "MERGED",
+      "open": false,
+      "closed": true,
+      "createdDate": 1705395600000,
+      "updatedDate": 1705482000000,
+      "closedDate": 1705482000000,
+      "fromRef": {
+        "id": "refs/heads/feature/fix-auth-bug",
+        "displayId": "feature/fix-auth-bug",
+        "latestCommit": "abcdef1234567890abcdef1234567890abcdef12",
+        "repository": {
+          "slug": "my-repo",
+          "name": "My Repository",
+          "project": {
+            "key": "PROJ"
+          }
+        }
+      },
+      "toRef": {
+        "id": "refs/heads/master",
+        "displayId": "master",
+        "latestCommit": "fedcba0987654321fedcba0987654321fedcba09",
+        "repository": {
+          "slug": "my-repo",
+          "name": "My Repository",
+          "project": {
+            "key": "PROJ"
+          }
+        }
+      },
+      "locked": false,
+      "author": {
+        "user": {
+          "name": "john.doe",
+          "emailAddress": "john.doe@example.com",
+          "id": 101,
+          "displayName": "John Doe",
+          "active": true,
+          "slug": "john.doe",
+          "type": "NORMAL"
+        },
+        "role": "AUTHOR",
+        "approved": false,
+        "status": "UNAPPROVED"
+      },
+      "reviewers": [
+        {
+          "user": {
+            "name": "jane.smith",
+            "emailAddress": "jane.smith@example.com",
+            "id": 103,
+            "displayName": "Jane Smith",
+            "active": true,
+            "slug": "jane.smith",
+            "type": "NORMAL"
+          },
+          "role": "REVIEWER",
+          "approved": true,
+          "status": "APPROVED"
+        },
+        {
+          "user": {
+            "name": "bob.wilson",
+            "emailAddress": "bob.wilson@example.com",
+            "id": 102,
+            "displayName": "Bob Wilson",
+            "active": true,
+            "slug": "bob.wilson",
+            "type": "NORMAL"
+          },
+          "role": "REVIEWER",
+          "approved": true,
+          "status": "APPROVED"
+        }
+      ],
+      "participants": [],
+      "links": {
+        "self": [
+          {
+            "href": "https://bitbucket.example.com/projects/PROJ/repos/my-repo/pull-requests/1"
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "version": 8,
+      "title": "Feature: User profile page implementation",
+      "description": "Implements the user profile page as described in PROJ-124.\n\n## Features\n- User avatar upload with image preview\n- Profile information editing\n- Account settings management\n- Responsive design for mobile devices\n\n## Screenshots\n![Profile Page](https://example.com/screenshots/profile.png)",
+      "state": "MERGED",
+      "open": false,
+      "closed": true,
+      "createdDate": 1705482000000,
+      "updatedDate": 1705654800000,
+      "closedDate": 1705654800000,
+      "fromRef": {
+        "id": "refs/heads/feature/user-profile",
+        "displayId": "feature/user-profile",
+        "latestCommit": "bcdef1234567890abcdef1234567890abcdef123",
+        "repository": {
+          "slug": "my-repo",
+          "name": "My Repository",
+          "project": {
+            "key": "PROJ"
+          }
+        }
+      },
+      "toRef": {
+        "id": "refs/heads/master",
+        "displayId": "master",
+        "latestCommit": "abcdef1234567890abcdef1234567890abcdef12",
+        "repository": {
+          "slug": "my-repo",
+          "name": "My Repository",
+          "project": {
+            "key": "PROJ"
+          }
+        }
+      },
+      "locked": false,
+      "author": {
+        "user": {
+          "name": "bob.wilson",
+          "emailAddress": "bob.wilson@example.com",
+          "id": 102,
+          "displayName": "Bob Wilson",
+          "active": true,
+          "slug": "bob.wilson",
+          "type": "NORMAL"
+        },
+        "role": "AUTHOR",
+        "approved": false,
+        "status": "UNAPPROVED"
+      },
+      "reviewers": [
+        {
+          "user": {
+            "name": "john.doe",
+            "emailAddress": "john.doe@example.com",
+            "id": 101,
+            "displayName": "John Doe",
+            "active": true,
+            "slug": "john.doe",
+            "type": "NORMAL"
+          },
+          "role": "REVIEWER",
+          "approved": true,
+          "status": "APPROVED"
+        },
+        {
+          "user": {
+            "name": "alice.brown",
+            "emailAddress": "alice.brown@example.com",
+            "id": 104,
+            "displayName": "Alice Brown",
+            "active": true,
+            "slug": "alice.brown",
+            "type": "NORMAL"
+          },
+          "role": "REVIEWER",
+          "approved": true,
+          "status": "APPROVED"
+        }
+      ],
+      "participants": [],
+      "links": {
+        "self": [
+          {
+            "href": "https://bitbucket.example.com/projects/PROJ/repos/my-repo/pull-requests/2"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "version": 3,
+      "title": "Database performance improvements",
+      "description": "Optimizes database queries for better performance.\n\n## Changes\n- Added indexes on user_id, created_at columns\n- Rewrote dashboard query to reduce N+1 problems\n- Implemented Redis caching for frequently accessed data\n\n## Performance Results\n- Dashboard load time: 2.5s → 0.8s (68% improvement)\n- API response time: 500ms → 180ms (64% improvement)\n- Database CPU usage: -40%",
+      "state": "OPEN",
+      "open": true,
+      "closed": false,
+      "createdDate": 1705741200000,
+      "updatedDate": 1705827600000,
+      "closedDate": null,
+      "fromRef": {
+        "id": "refs/heads/feature/db-optimization",
+        "displayId": "feature/db-optimization",
+        "latestCommit": "cdef1234567890abcdef1234567890abcdef1234",
+        "repository": {
+          "slug": "my-repo",
+          "name": "My Repository",
+          "project": {
+            "key": "PROJ"
+          }
+        }
+      },
+      "toRef": {
+        "id": "refs/heads/master",
+        "displayId": "master",
+        "latestCommit": "bcdef1234567890abcdef1234567890abcdef123",
+        "repository": {
+          "slug": "my-repo",
+          "name": "My Repository",
+          "project": {
+            "key": "PROJ"
+          }
+        }
+      },
+      "locked": false,
+      "author": {
+        "user": {
+          "name": "jane.smith",
+          "emailAddress": "jane.smith@example.com",
+          "id": 103,
+          "displayName": "Jane Smith",
+          "active": true,
+          "slug": "jane.smith",
+          "type": "NORMAL"
+        },
+        "role": "AUTHOR",
+        "approved": false,
+        "status": "UNAPPROVED"
+      },
+      "reviewers": [
+        {
+          "user": {
+            "name": "john.doe",
+            "emailAddress": "john.doe@example.com",
+            "id": 101,
+            "displayName": "John Doe",
+            "active": true,
+            "slug": "john.doe",
+            "type": "NORMAL"
+          },
+          "role": "REVIEWER",
+          "approved": false,
+          "status": "UNAPPROVED"
+        },
+        {
+          "user": {
+            "name": "alice.brown",
+            "emailAddress": "alice.brown@example.com",
+            "id": 104,
+            "displayName": "Alice Brown",
+            "active": true,
+            "slug": "alice.brown",
+            "type": "NORMAL"
+          },
+          "role": "REVIEWER",
+          "approved": true,
+          "status": "APPROVED"
+        }
+      ],
+      "participants": [],
+      "links": {
+        "self": [
+          {
+            "href": "https://bitbucket.example.com/projects/PROJ/repos/my-repo/pull-requests/3"
+          }
+        ]
+      }
+    }
+  ],
+  "start": 0
+}

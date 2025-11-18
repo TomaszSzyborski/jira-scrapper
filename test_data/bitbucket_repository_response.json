@@ -1,0 +1,45 @@
+{
+  "slug": "my-repo",
+  "id": 1,
+  "name": "My Repository",
+  "description": "Main application repository for the project",
+  "hierarchyId": "abc123def456",
+  "scmId": "git",
+  "state": "AVAILABLE",
+  "statusMessage": "Available",
+  "forkable": true,
+  "project": {
+    "key": "PROJ",
+    "id": 1,
+    "name": "Project Example",
+    "description": "Example project for testing",
+    "public": false,
+    "type": "NORMAL",
+    "links": {
+      "self": [
+        {
+          "href": "https://bitbucket.example.com/projects/PROJ"
+        }
+      ]
+    }
+  },
+  "public": false,
+  "archived": false,
+  "links": {
+    "clone": [
+      {
+        "href": "ssh://git@bitbucket.example.com:7999/proj/my-repo.git",
+        "name": "ssh"
+      },
+      {
+        "href": "https://bitbucket.example.com/scm/proj/my-repo.git",
+        "name": "http"
+      }
+    ],
+    "self": [
+      {
+        "href": "https://bitbucket.example.com/projects/PROJ/repos/my-repo/browse"
+      }
+    ]
+  }
+}

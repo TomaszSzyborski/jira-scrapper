@@ -1,0 +1,142 @@
+{
+  "expand": "schema,names",
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 2,
+  "issues": [
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "20001",
+      "self": "https://jira.example.com/rest/api/2/issue/20001",
+      "key": "PROJ-201",
+      "fields": {
+        "summary": "Sprint 1 - Test Execution",
+        "description": "Test execution for Sprint 1 features including login, user profile, and search functionality.",
+        "status": {
+          "self": "https://jira.example.com/rest/api/2/status/10002",
+          "description": "The issue has been resolved.",
+          "iconUrl": "https://jira.example.com/images/icons/statuses/done.png",
+          "name": "Done",
+          "id": "10002",
+          "statusCategory": {
+            "self": "https://jira.example.com/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "issuetype": {
+          "self": "https://jira.example.com/rest/api/2/issuetype/10100",
+          "id": "10100",
+          "description": "Xray Test Execution",
+          "iconUrl": "https://jira.example.com/secure/viewavatar?size=xsmall&avatarId=10400&avatarType=issuetype",
+          "name": "Test Execution",
+          "subtask": false
+        },
+        "project": {
+          "self": "https://jira.example.com/rest/api/2/project/10000",
+          "id": "10000",
+          "key": "PROJ",
+          "name": "Project Example"
+        },
+        "created": "2024-01-15T08:00:00.000+0000",
+        "updated": "2024-01-15T18:30:00.000+0000",
+        "assignee": {
+          "self": "https://jira.example.com/rest/api/2/user?username=qa.tester",
+          "name": "qa.tester",
+          "key": "qa.tester",
+          "emailAddress": "qa.tester@example.com",
+          "displayName": "QA Tester",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "reporter": {
+          "self": "https://jira.example.com/rest/api/2/user?username=qa.tester",
+          "name": "qa.tester",
+          "key": "qa.tester",
+          "emailAddress": "qa.tester@example.com",
+          "displayName": "QA Tester",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "labels": [
+          "sprint-1",
+          "regression"
+        ],
+        "customfield_10000": "PROJ-300",
+        "customfield_10001": [
+          "Chrome",
+          "Firefox"
+        ]
+      }
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "20002",
+      "self": "https://jira.example.com/rest/api/2/issue/20002",
+      "key": "PROJ-202",
+      "fields": {
+        "summary": "API Integration Tests - Execution",
+        "description": "Automated API integration tests for backend services.",
+        "status": {
+          "self": "https://jira.example.com/rest/api/2/status/10000",
+          "description": "The issue is currently being worked on.",
+          "iconUrl": "https://jira.example.com/images/icons/statuses/inprogress.png",
+          "name": "In Progress",
+          "id": "3",
+          "statusCategory": {
+            "self": "https://jira.example.com/rest/api/2/statuscategory/4",
+            "id": 4,
+            "key": "indeterminate",
+            "colorName": "yellow",
+            "name": "In Progress"
+          }
+        },
+        "issuetype": {
+          "self": "https://jira.example.com/rest/api/2/issuetype/10100",
+          "id": "10100",
+          "description": "Xray Test Execution",
+          "iconUrl": "https://jira.example.com/secure/viewavatar?size=xsmall&avatarId=10400&avatarType=issuetype",
+          "name": "Test Execution",
+          "subtask": false
+        },
+        "project": {
+          "self": "https://jira.example.com/rest/api/2/project/10000",
+          "id": "10000",
+          "key": "PROJ",
+          "name": "Project Example"
+        },
+        "created": "2024-01-20T09:00:00.000+0000",
+        "updated": "2024-01-20T16:45:00.000+0000",
+        "assignee": {
+          "self": "https://jira.example.com/rest/api/2/user?username=qa.automation",
+          "name": "qa.automation",
+          "key": "qa.automation",
+          "emailAddress": "qa.automation@example.com",
+          "displayName": "QA Automation Engineer",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "reporter": {
+          "self": "https://jira.example.com/rest/api/2/user?username=qa.automation",
+          "name": "qa.automation",
+          "key": "qa.automation",
+          "emailAddress": "qa.automation@example.com",
+          "displayName": "QA Automation Engineer",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "labels": [
+          "api",
+          "automation"
+        ],
+        "customfield_10000": "PROJ-301",
+        "customfield_10001": [
+          "Production",
+          "Staging"
+        ]
+      }
+    }
+  ]
+}

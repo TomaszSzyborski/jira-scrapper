@@ -1,0 +1,401 @@
+{
+  "expand": "schema,names",
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 3,
+  "issues": [
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "10001",
+      "self": "https://jira.example.com/rest/api/2/issue/10001",
+      "key": "PROJ-123",
+      "fields": {
+        "summary": "Fix login authentication bug",
+        "description": "Users are unable to log in with valid credentials. Need to investigate and fix the authentication service.",
+        "status": {
+          "self": "https://jira.example.com/rest/api/2/status/10000",
+          "description": "The issue is currently being worked on.",
+          "iconUrl": "https://jira.example.com/images/icons/statuses/inprogress.png",
+          "name": "In Progress",
+          "id": "3",
+          "statusCategory": {
+            "self": "https://jira.example.com/rest/api/2/statuscategory/4",
+            "id": 4,
+            "key": "indeterminate",
+            "colorName": "yellow",
+            "name": "In Progress"
+          }
+        },
+        "issuetype": {
+          "self": "https://jira.example.com/rest/api/2/issuetype/1",
+          "id": "1",
+          "description": "A problem which impairs or prevents the functions of the product.",
+          "iconUrl": "https://jira.example.com/secure/viewavatar?size=xsmall&avatarId=10303&avatarType=issuetype",
+          "name": "Bug",
+          "subtask": false
+        },
+        "project": {
+          "self": "https://jira.example.com/rest/api/2/project/10000",
+          "id": "10000",
+          "key": "PROJ",
+          "name": "Project Example",
+          "avatarUrls": {
+            "48x48": "https://jira.example.com/secure/projectavatar?avatarId=10324",
+            "24x24": "https://jira.example.com/secure/projectavatar?size=small&avatarId=10324",
+            "16x16": "https://jira.example.com/secure/projectavatar?size=xsmall&avatarId=10324",
+            "32x32": "https://jira.example.com/secure/projectavatar?size=medium&avatarId=10324"
+          }
+        },
+        "created": "2024-01-15T09:30:00.000+0000",
+        "updated": "2024-01-20T14:45:00.000+0000",
+        "priority": {
+          "self": "https://jira.example.com/rest/api/2/priority/2",
+          "iconUrl": "https://jira.example.com/images/icons/priorities/high.svg",
+          "name": "High",
+          "id": "2"
+        },
+        "assignee": {
+          "self": "https://jira.example.com/rest/api/2/user?username=john.doe",
+          "name": "john.doe",
+          "key": "john.doe",
+          "emailAddress": "john.doe@example.com",
+          "avatarUrls": {
+            "48x48": "https://jira.example.com/secure/useravatar?avatarId=10342",
+            "24x24": "https://jira.example.com/secure/useravatar?size=small&avatarId=10342",
+            "16x16": "https://jira.example.com/secure/useravatar?size=xsmall&avatarId=10342",
+            "32x32": "https://jira.example.com/secure/useravatar?size=medium&avatarId=10342"
+          },
+          "displayName": "John Doe",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "reporter": {
+          "self": "https://jira.example.com/rest/api/2/user?username=jane.smith",
+          "name": "jane.smith",
+          "key": "jane.smith",
+          "emailAddress": "jane.smith@example.com",
+          "avatarUrls": {
+            "48x48": "https://jira.example.com/secure/useravatar?avatarId=10343",
+            "24x24": "https://jira.example.com/secure/useravatar?size=small&avatarId=10343",
+            "16x16": "https://jira.example.com/secure/useravatar?size=xsmall&avatarId=10343",
+            "32x32": "https://jira.example.com/secure/useravatar?size=medium&avatarId=10343"
+          },
+          "displayName": "Jane Smith",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "labels": [
+          "authentication",
+          "security",
+          "production"
+        ],
+        "resolution": null,
+        "resolutiondate": null
+      },
+      "changelog": {
+        "startAt": 0,
+        "maxResults": 3,
+        "total": 3,
+        "histories": [
+          {
+            "id": "10101",
+            "author": {
+              "self": "https://jira.example.com/rest/api/2/user?username=jane.smith",
+              "name": "jane.smith",
+              "key": "jane.smith",
+              "emailAddress": "jane.smith@example.com",
+              "displayName": "Jane Smith",
+              "active": true
+            },
+            "created": "2024-01-15T09:30:00.000+0000",
+            "items": [
+              {
+                "field": "status",
+                "fieldtype": "jira",
+                "from": "1",
+                "fromString": "To Do",
+                "to": "10000",
+                "toString": "In Progress"
+              }
+            ]
+          },
+          {
+            "id": "10102",
+            "author": {
+              "self": "https://jira.example.com/rest/api/2/user?username=john.doe",
+              "name": "john.doe",
+              "key": "john.doe",
+              "emailAddress": "john.doe@example.com",
+              "displayName": "John Doe",
+              "active": true
+            },
+            "created": "2024-01-18T11:20:00.000+0000",
+            "items": [
+              {
+                "field": "status",
+                "fieldtype": "jira",
+                "from": "10000",
+                "fromString": "In Progress",
+                "to": "10001",
+                "toString": "In Review"
+              }
+            ]
+          },
+          {
+            "id": "10103",
+            "author": {
+              "self": "https://jira.example.com/rest/api/2/user?username=john.doe",
+              "name": "john.doe",
+              "key": "john.doe",
+              "emailAddress": "john.doe@example.com",
+              "displayName": "John Doe",
+              "active": true
+            },
+            "created": "2024-01-20T14:45:00.000+0000",
+            "items": [
+              {
+                "field": "status",
+                "fieldtype": "jira",
+                "from": "10001",
+                "fromString": "In Review",
+                "to": "10000",
+                "toString": "In Progress"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "10002",
+      "self": "https://jira.example.com/rest/api/2/issue/10002",
+      "key": "PROJ-124",
+      "fields": {
+        "summary": "Implement user profile page",
+        "description": "Create a new user profile page with editing capabilities, avatar upload, and settings management.",
+        "status": {
+          "self": "https://jira.example.com/rest/api/2/status/10002",
+          "description": "The issue has been resolved.",
+          "iconUrl": "https://jira.example.com/images/icons/statuses/done.png",
+          "name": "Done",
+          "id": "10002",
+          "statusCategory": {
+            "self": "https://jira.example.com/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "issuetype": {
+          "self": "https://jira.example.com/rest/api/2/issuetype/7",
+          "id": "7",
+          "description": "A user story.",
+          "iconUrl": "https://jira.example.com/secure/viewavatar?size=xsmall&avatarId=10315&avatarType=issuetype",
+          "name": "Story",
+          "subtask": false
+        },
+        "project": {
+          "self": "https://jira.example.com/rest/api/2/project/10000",
+          "id": "10000",
+          "key": "PROJ",
+          "name": "Project Example"
+        },
+        "created": "2024-01-10T08:00:00.000+0000",
+        "updated": "2024-01-22T16:30:00.000+0000",
+        "priority": {
+          "self": "https://jira.example.com/rest/api/2/priority/3",
+          "iconUrl": "https://jira.example.com/images/icons/priorities/medium.svg",
+          "name": "Medium",
+          "id": "3"
+        },
+        "assignee": {
+          "self": "https://jira.example.com/rest/api/2/user?username=bob.wilson",
+          "name": "bob.wilson",
+          "key": "bob.wilson",
+          "emailAddress": "bob.wilson@example.com",
+          "displayName": "Bob Wilson",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "reporter": {
+          "self": "https://jira.example.com/rest/api/2/user?username=jane.smith",
+          "name": "jane.smith",
+          "key": "jane.smith",
+          "emailAddress": "jane.smith@example.com",
+          "displayName": "Jane Smith",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "labels": [
+          "frontend",
+          "user-experience"
+        ],
+        "resolution": {
+          "self": "https://jira.example.com/rest/api/2/resolution/10000",
+          "id": "10000",
+          "description": "Work has been completed on this issue.",
+          "name": "Done"
+        },
+        "resolutiondate": "2024-01-22T16:30:00.000+0000"
+      },
+      "changelog": {
+        "startAt": 0,
+        "maxResults": 4,
+        "total": 4,
+        "histories": [
+          {
+            "id": "10201",
+            "author": {
+              "name": "bob.wilson",
+              "displayName": "Bob Wilson"
+            },
+            "created": "2024-01-12T10:00:00.000+0000",
+            "items": [
+              {
+                "field": "status",
+                "fieldtype": "jira",
+                "from": "1",
+                "fromString": "To Do",
+                "to": "10000",
+                "toString": "In Progress"
+              }
+            ]
+          },
+          {
+            "id": "10202",
+            "author": {
+              "name": "bob.wilson",
+              "displayName": "Bob Wilson"
+            },
+            "created": "2024-01-19T14:30:00.000+0000",
+            "items": [
+              {
+                "field": "status",
+                "fieldtype": "jira",
+                "from": "10000",
+                "fromString": "In Progress",
+                "to": "10003",
+                "toString": "To Test"
+              }
+            ]
+          },
+          {
+            "id": "10203",
+            "author": {
+              "name": "jane.smith",
+              "displayName": "Jane Smith"
+            },
+            "created": "2024-01-21T09:15:00.000+0000",
+            "items": [
+              {
+                "field": "status",
+                "fieldtype": "jira",
+                "from": "10003",
+                "fromString": "To Test",
+                "to": "10004",
+                "toString": "In Testing"
+              }
+            ]
+          },
+          {
+            "id": "10204",
+            "author": {
+              "name": "jane.smith",
+              "displayName": "Jane Smith"
+            },
+            "created": "2024-01-22T16:30:00.000+0000",
+            "items": [
+              {
+                "field": "status",
+                "fieldtype": "jira",
+                "from": "10004",
+                "fromString": "In Testing",
+                "to": "10002",
+                "toString": "Done"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "10003",
+      "self": "https://jira.example.com/rest/api/2/issue/10003",
+      "key": "PROJ-125",
+      "fields": {
+        "summary": "Database performance optimization",
+        "description": "Optimize slow database queries and add proper indexing to improve application performance.",
+        "status": {
+          "self": "https://jira.example.com/rest/api/2/status/1",
+          "description": "The issue is open and ready for the assignee to start work on it.",
+          "iconUrl": "https://jira.example.com/images/icons/statuses/open.png",
+          "name": "To Do",
+          "id": "1",
+          "statusCategory": {
+            "self": "https://jira.example.com/rest/api/2/statuscategory/2",
+            "id": 2,
+            "key": "new",
+            "colorName": "blue-gray",
+            "name": "To Do"
+          }
+        },
+        "issuetype": {
+          "self": "https://jira.example.com/rest/api/2/issuetype/4",
+          "id": "4",
+          "description": "A task that needs to be done.",
+          "iconUrl": "https://jira.example.com/secure/viewavatar?size=xsmall&avatarId=10318&avatarType=issuetype",
+          "name": "Zadanie Dev",
+          "subtask": false
+        },
+        "project": {
+          "self": "https://jira.example.com/rest/api/2/project/10000",
+          "id": "10000",
+          "key": "PROJ",
+          "name": "Project Example"
+        },
+        "created": "2024-01-23T13:00:00.000+0000",
+        "updated": "2024-01-23T13:00:00.000+0000",
+        "priority": {
+          "self": "https://jira.example.com/rest/api/2/priority/2",
+          "iconUrl": "https://jira.example.com/images/icons/priorities/high.svg",
+          "name": "High",
+          "id": "2"
+        },
+        "assignee": {
+          "self": "https://jira.example.com/rest/api/2/user?username=john.doe",
+          "name": "john.doe",
+          "key": "john.doe",
+          "emailAddress": "john.doe@example.com",
+          "displayName": "John Doe",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "reporter": {
+          "self": "https://jira.example.com/rest/api/2/user?username=alice.brown",
+          "name": "alice.brown",
+          "key": "alice.brown",
+          "emailAddress": "alice.brown@example.com",
+          "displayName": "Alice Brown",
+          "active": true,
+          "timeZone": "Europe/Warsaw"
+        },
+        "labels": [
+          "performance",
+          "database",
+          "optimization"
+        ],
+        "resolution": null,
+        "resolutiondate": null
+      },
+      "changelog": {
+        "startAt": 0,
+        "maxResults": 0,
+        "total": 0,
+        "histories": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+[
+  {
+    "id": 12345,
+    "status": {
+      "id": 1,
+      "name": "PASS",
+      "description": "Test passed successfully"
+    },
+    "testKey": "PROJ-401",
+    "testExecKey": "PROJ-201",
+    "startedOn": "2024-01-15T10:30:00.000Z",
+    "finishedOn": "2024-01-15T10:32:30.000Z",
+    "executedBy": "qa.tester",
+    "comment": "Login test passed",
+    "defects": []
+  },
+  {
+    "id": 12346,
+    "status": {
+      "id": 2,
+      "name": "FAIL",
+      "description": "Test failed"
+    },
+    "testKey": "PROJ-402",
+    "testExecKey": "PROJ-201",
+    "startedOn": "2024-01-15T10:35:00.000Z",
+    "finishedOn": "2024-01-15T10:38:45.000Z",
+    "executedBy": "qa.tester",
+    "comment": "Profile picture upload failing with 413 error",
+    "defects": ["PROJ-500"]
+  },
+  {
+    "id": 12347,
+    "status": {
+      "id": 1,
+      "name": "PASS",
+      "description": "Test passed successfully"
+    },
+    "testKey": "PROJ-403",
+    "testExecKey": "PROJ-201",
+    "startedOn": "2024-01-15T10:40:00.000Z",
+    "finishedOn": "2024-01-15T10:45:30.000Z",
+    "executedBy": "qa.tester",
+    "comment": "Search functionality working correctly",
+    "defects": []
+  },
+  {
+    "id": 12348,
+    "status": {
+      "id": 1,
+      "name": "PASS",
+      "description": "Test passed successfully"
+    },
+    "testKey": "PROJ-404",
+    "testExecKey": "PROJ-201",
+    "startedOn": "2024-01-15T11:00:00.000Z",
+    "finishedOn": "2024-01-15T11:05:15.000Z",
+    "executedBy": "qa.tester",
+    "comment": "Pagination working as expected",
+    "defects": []
+  },
+  {
+    "id": 12349,
+    "status": {
+      "id": 3,
+      "name": "TODO",
+      "description": "Test not executed yet"
+    },
+    "testKey": "PROJ-405",
+    "testExecKey": "PROJ-201",
+    "startedOn": null,
+    "finishedOn": null,
+    "executedBy": null,
+    "comment": "",
+    "defects": []
+  }
+]
