@@ -1,5 +1,8 @@
 # Quick Start Guide - Xray & Bitbucket Scrapers
 
+> **Note:** Bitbucket components have been reorganized into a dedicated `bitbucket_analyzer` package.
+> See [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) for details.
+
 ## Prerequisites
 
 1. Python 3.13+ installed

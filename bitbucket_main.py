@@ -25,9 +25,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from jira_analyzer.bitbucket_fetcher import BitbucketFetcher
-from jira_analyzer.bitbucket_analyzer import BitbucketAnalyzer
-from jira_analyzer.bitbucket_reporter import BitbucketReportGenerator
+from bitbucket_analyzer import BitbucketFetcher, BitbucketAnalyzer, BitbucketReportGenerator
 
 
 def parse_arguments():

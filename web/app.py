@@ -25,9 +25,7 @@ from jira_analyzer import JiraFetcher, FlowAnalyzer, ReportGenerator
 from jira_analyzer.xray_fetcher import XrayFetcher
 from jira_analyzer.xray_analyzer import XrayAnalyzer
 from jira_analyzer.xray_reporter import XrayReportGenerator
-from jira_analyzer.bitbucket_fetcher import BitbucketFetcher
-from jira_analyzer.bitbucket_analyzer import BitbucketAnalyzer
-from jira_analyzer.bitbucket_reporter import BitbucketReportGenerator
+from bitbucket_analyzer import BitbucketFetcher, BitbucketAnalyzer, BitbucketReportGenerator
 
 
 app = FastAPI(

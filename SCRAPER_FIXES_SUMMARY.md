@@ -1,5 +1,8 @@
 # Xray and Bitbucket Scraper Fixes - Summary
 
+> **Update (2025-11-19):** Bitbucket components have been reorganized into a dedicated `bitbucket_analyzer` package.
+> See [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) for migration details.
+
 ## Overview
 This document summarizes the fixes and enhancements made to both the Xray and Bitbucket scrapers to ensure they work properly with on-prem APIs and provide comprehensive code analysis.
 
@@ -57,7 +60,7 @@ tests_url = f"{self.jira_url}/rest/raven/1.0/api/testexec/{execution_key}/test"
 
 ### Fixes Applied
 
-#### File: `jira_analyzer/bitbucket_fetcher.py`
+#### File: `bitbucket_analyzer/fetcher.py` (formerly `jira_analyzer/bitbucket_fetcher.py`)
 
 **Major Additions:**
 
@@ -105,7 +108,7 @@ tests_url = f"{self.jira_url}/rest/raven/1.0/api/testexec/{execution_key}/test"
 
 ---
 
-#### File: `jira_analyzer/bitbucket_analyzer.py`
+#### File: `bitbucket_analyzer/analyzer.py` (formerly `jira_analyzer/bitbucket_analyzer.py`)
 
 **Major Enhancements:**
 
@@ -357,12 +360,16 @@ BITBUCKET_PASSWORD=your_password
 |------|---------|----------------|
 | `jira_analyzer/xray_fetcher.py` | On-prem API support + fallback | ~150 lines |
 | `jira_analyzer/xray_analyzer.py` | Timezone fix | ~5 lines |
-| `jira_analyzer/bitbucket_fetcher.py` | Diff & activity fetching | ~250 lines |
-| `jira_analyzer/bitbucket_analyzer.py` | Code churn & PR analysis | ~200 lines |
+| `bitbucket_analyzer/fetcher.py` | Diff & activity fetching | ~250 lines |
+| `bitbucket_analyzer/analyzer.py` | Code churn & PR analysis | ~200 lines |
 | `bitbucket_main.py` | Enhanced output display | ~50 lines |
 | `test_scrapers.py` | New comprehensive test suite | ~340 lines (new file) |
+| `bitbucket_analyzer/__init__.py` | Package reorganization | Updated |
 
 **Total: ~1000 lines of code added/modified**
+
+> **Note:** Bitbucket files were later reorganized from `jira_analyzer/` to `bitbucket_analyzer/` package.
+> See [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) for details.
 
 ---
 

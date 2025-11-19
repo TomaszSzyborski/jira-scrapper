@@ -67,7 +67,7 @@ def test_bitbucket_fetcher():
     print("=" * 80)
 
     try:
-        from jira_analyzer.bitbucket_fetcher import BitbucketFetcher
+        from bitbucket_analyzer import BitbucketFetcher
 
         print("✓ BitbucketFetcher imported successfully")
 
@@ -187,7 +187,7 @@ def test_bitbucket_analyzer():
     print("=" * 80)
 
     try:
-        from jira_analyzer.bitbucket_analyzer import BitbucketAnalyzer
+        from bitbucket_analyzer import BitbucketAnalyzer
 
         print("✓ BitbucketAnalyzer imported successfully")
 
