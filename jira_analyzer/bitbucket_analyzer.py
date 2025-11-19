@@ -64,10 +64,14 @@ class BitbucketAnalyzer:
             - contributor_stats: Statistics per contributor
             - pr_metrics: Pull request metrics
             - activity_summary: Summary of repository activity
+            - code_churn_metrics: Code churn analysis
+            - pr_code_review_metrics: PR review analysis
         """
         # Calculate enhanced commit and PR metrics
         commit_activity = self.calculate_commit_activity_metrics()
         pr_detailed = self.calculate_detailed_pr_metrics()
+        code_churn = self.calculate_code_churn_metrics()
+        pr_code_review = self.calculate_pr_code_review_metrics()
 
         metrics = {
             'total_commits': len(self.commits),
@@ -83,6 +87,8 @@ class BitbucketAnalyzer:
             },
             'commit_activity': commit_activity,
             'pr_detailed_metrics': pr_detailed,
+            'code_churn_metrics': code_churn,
+            'pr_code_review_metrics': pr_code_review,
         }
 
         return metrics
@@ -133,6 +139,7 @@ class BitbucketAnalyzer:
             'commits': 0,
             'additions': 0,
             'deletions': 0,
+            'files_changed': 0,
             'name': '',
             'email': '',
             'first_commit': None,
@@ -149,6 +156,11 @@ class BitbucketAnalyzer:
                 contributor_data[email]['email'] = email
                 if not contributor_data[email]['name']:
                     contributor_data[email]['name'] = name
+
+                # Track lines changed
+                contributor_data[email]['additions'] += commit.get('lines_added', 0)
+                contributor_data[email]['deletions'] += commit.get('lines_removed', 0)
+                contributor_data[email]['files_changed'] += commit.get('files_changed', 0)
 
                 # Track first and last commit timestamps
                 if not contributor_data[email]['first_commit']:
@@ -503,4 +515,163 @@ class BitbucketAnalyzer:
             'accept_reject_ratio': round(accept_reject_ratio, 2),
             'reviewer_bottlenecks': reviewer_bottlenecks,
             'total_review_hours': round(sum(review_times), 2),
+        }
+
+    def calculate_code_churn_metrics(self) -> dict:
+        """
+        Calculate code churn metrics from commits.
+
+        Analyzes:
+        - Total lines added, removed, modified across all commits
+        - Code churn per contributor
+        - File-level churn (which files change most)
+        - Commit size distribution
+        - Lines changed per commit statistics
+
+        Returns:
+            Dictionary containing code churn metrics
+        """
+        total_lines_added = 0
+        total_lines_removed = 0
+        total_files_changed = 0
+        commit_sizes = []
+        file_change_frequency = defaultdict(int)
+
+        for commit in self.commits:
+            lines_added = commit.get('lines_added', 0)
+            lines_removed = commit.get('lines_removed', 0)
+            files_changed = commit.get('files_changed', 0)
+
+            total_lines_added += lines_added
+            total_lines_removed += lines_removed
+            total_files_changed += files_changed
+
+            # Track commit size
+            commit_size = lines_added + lines_removed
+            commit_sizes.append(commit_size)
+
+            # Track file changes
+            file_changes = commit.get('file_changes', [])
+            for file_change in file_changes:
+                file_path = file_change.get('path', '')
+                if file_path:
+                    file_change_frequency[file_path] += 1
+
+        # Calculate statistics
+        total_commits = len(self.commits)
+        avg_lines_per_commit = (total_lines_added + total_lines_removed) / total_commits if total_commits > 0 else 0
+        avg_files_per_commit = total_files_changed / total_commits if total_commits > 0 else 0
+
+        # Commit size distribution
+        small_commits = len([s for s in commit_sizes if s < 50])
+        medium_commits = len([s for s in commit_sizes if 50 <= s < 200])
+        large_commits = len([s for s in commit_sizes if s >= 200])
+
+        # Top changed files
+        top_changed_files = sorted(
+            [{'file': f, 'changes': c} for f, c in file_change_frequency.items()],
+            key=lambda x: x['changes'],
+            reverse=True
+        )[:20]
+
+        return {
+            'total_lines_added': total_lines_added,
+            'total_lines_removed': total_lines_removed,
+            'total_lines_modified': total_lines_added + total_lines_removed,
+            'total_files_changed': total_files_changed,
+            'avg_lines_per_commit': round(avg_lines_per_commit, 2),
+            'avg_files_per_commit': round(avg_files_per_commit, 2),
+            'commit_size_distribution': {
+                'small': small_commits,  # < 50 lines
+                'medium': medium_commits,  # 50-200 lines
+                'large': large_commits  # >= 200 lines
+            },
+            'top_changed_files': top_changed_files,
+            'net_lines_change': total_lines_added - total_lines_removed,
+        }
+
+    def calculate_pr_code_review_metrics(self) -> dict:
+        """
+        Calculate comprehensive PR code review metrics.
+
+        Analyzes:
+        - Lines changed in PRs vs direct commits
+        - PR size distribution
+        - Review engagement (comments, approvals per PR)
+        - PR complexity metrics
+
+        Returns:
+            Dictionary containing PR code review metrics
+        """
+        if not self.pull_requests:
+            return {
+                'total_pr_lines_added': 0,
+                'total_pr_lines_removed': 0,
+                'avg_pr_size': 0,
+                'avg_comments_per_pr': 0,
+                'avg_approvals_per_pr': 0,
+                'pr_size_distribution': {},
+                'review_engagement_rate': 0,
+            }
+
+        total_pr_lines_added = 0
+        total_pr_lines_removed = 0
+        total_pr_files = 0
+        total_comments = 0
+        total_approvals = 0
+        pr_sizes = []
+
+        for pr in self.pull_requests:
+            pr_lines_added = pr.get('pr_lines_added', 0)
+            pr_lines_removed = pr.get('pr_lines_removed', 0)
+            pr_files = pr.get('pr_files_changed', 0)
+
+            total_pr_lines_added += pr_lines_added
+            total_pr_lines_removed += pr_lines_removed
+            total_pr_files += pr_files
+
+            pr_size = pr_lines_added + pr_lines_removed
+            pr_sizes.append(pr_size)
+
+            # Count engagement
+            activities = pr.get('activities', {})
+            total_comments += activities.get('comments_count', 0)
+            total_approvals += activities.get('approvals_count', 0)
+
+        total_prs = len(self.pull_requests)
+        avg_pr_size = sum(pr_sizes) / total_prs if total_prs > 0 else 0
+        avg_comments = total_comments / total_prs if total_prs > 0 else 0
+        avg_approvals = total_approvals / total_prs if total_prs > 0 else 0
+
+        # PR size distribution
+        small_prs = len([s for s in pr_sizes if s < 100])
+        medium_prs = len([s for s in pr_sizes if 100 <= s < 500])
+        large_prs = len([s for s in pr_sizes if s >= 500])
+
+        # Review engagement rate (PRs with at least 1 comment or approval)
+        engaged_prs = 0
+        for pr in self.pull_requests:
+            activities = pr.get('activities', {})
+            if activities.get('comments_count', 0) > 0 or activities.get('approvals_count', 0) > 0:
+                engaged_prs += 1
+
+        engagement_rate = (engaged_prs / total_prs * 100) if total_prs > 0 else 0
+
+        return {
+            'total_pr_lines_added': total_pr_lines_added,
+            'total_pr_lines_removed': total_pr_lines_removed,
+            'total_pr_lines_modified': total_pr_lines_added + total_pr_lines_removed,
+            'total_pr_files_changed': total_pr_files,
+            'avg_pr_size_lines': round(avg_pr_size, 2),
+            'avg_files_per_pr': round(total_pr_files / total_prs, 2) if total_prs > 0 else 0,
+            'avg_comments_per_pr': round(avg_comments, 2),
+            'avg_approvals_per_pr': round(avg_approvals, 2),
+            'pr_size_distribution': {
+                'small': small_prs,  # < 100 lines
+                'medium': medium_prs,  # 100-500 lines
+                'large': large_prs  # >= 500 lines
+            },
+            'review_engagement_rate': round(engagement_rate, 2),
+            'total_pr_comments': total_comments,
+            'total_pr_approvals': total_approvals,
         }

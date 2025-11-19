@@ -372,7 +372,8 @@ class XrayAnalyzer:
                                     last_execution_dates[test_key] = execution_date
 
         # Calculate not executed in N days
-        now = datetime.now()
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         not_executed_30_days = 0
         not_executed_60_days = 0
         not_executed_90_days = 0

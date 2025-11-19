@@ -276,12 +276,44 @@ def main():
     if busiest_contributor:
         print(f"  Top Contributor: {busiest_contributor['name']} ({busiest_contributor['commits']} commits)")
 
+    # Code churn metrics
+    code_churn = metrics.get('code_churn_metrics', {})
+    if code_churn:
+        print(f"\n💻 Code Churn:")
+        print(f"  Total Lines Added: {code_churn.get('total_lines_added', 0):,}")
+        print(f"  Total Lines Removed: {code_churn.get('total_lines_removed', 0):,}")
+        print(f"  Total Lines Modified: {code_churn.get('total_lines_modified', 0):,}")
+        print(f"  Net Lines Change: {code_churn.get('net_lines_change', 0):+,}")
+        print(f"  Total Files Changed: {code_churn.get('total_files_changed', 0):,}")
+        print(f"  Avg Lines/Commit: {code_churn.get('avg_lines_per_commit', 0):.1f}")
+        print(f"  Avg Files/Commit: {code_churn.get('avg_files_per_commit', 0):.1f}")
+
+        size_dist = code_churn.get('commit_size_distribution', {})
+        print(f"  Commit Sizes: {size_dist.get('small', 0)} small, {size_dist.get('medium', 0)} medium, {size_dist.get('large', 0)} large")
+
+    # PR code review metrics
+    pr_review = metrics.get('pr_code_review_metrics', {})
+    if pr_review and pr_review.get('total_pr_lines_modified', 0) > 0:
+        print(f"\n🔍 Pull Request Analysis:")
+        print(f"  Total PR Lines Modified: {pr_review.get('total_pr_lines_modified', 0):,}")
+        print(f"  Avg PR Size: {pr_review.get('avg_pr_size_lines', 0):.1f} lines")
+        print(f"  Avg Comments/PR: {pr_review.get('avg_comments_per_pr', 0):.1f}")
+        print(f"  Avg Approvals/PR: {pr_review.get('avg_approvals_per_pr', 0):.1f}")
+        print(f"  Review Engagement Rate: {pr_review.get('review_engagement_rate', 0):.1f}%")
+
+        pr_size_dist = pr_review.get('pr_size_distribution', {})
+        print(f"  PR Sizes: {pr_size_dist.get('small', 0)} small, {pr_size_dist.get('medium', 0)} medium, {pr_size_dist.get('large', 0)} large")
+
     # Top contributors
     top_contributors = analyzer.get_top_contributors(limit=5)
     if top_contributors:
         print(f"\n👥 Top 5 Contributors:")
         for i, contributor in enumerate(top_contributors, 1):
-            print(f"  {i}. {contributor['name']} ({contributor['email']}): {contributor['commits']} commits")
+            additions = contributor.get('additions', 0)
+            deletions = contributor.get('deletions', 0)
+            files = contributor.get('files_changed', 0)
+            print(f"  {i}. {contributor['name']} ({contributor['email']})")
+            print(f"      {contributor['commits']} commits | +{additions:,}/-{deletions:,} lines | {files:,} files")
 
     # Generate HTML report if requested
     if args.report:

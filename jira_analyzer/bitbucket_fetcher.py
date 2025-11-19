@@ -147,6 +147,12 @@ class BitbucketFetcher:
                 for commit_data in batch:
                     commit = self._commit_to_dict(commit_data)
 
+                    # Fetch diff/changeset data for this commit
+                    commit_id = commit.get('id')
+                    if commit_id:
+                        diff_stats = self._fetch_commit_changes(project, repository, commit_id)
+                        commit.update(diff_stats)
+
                     # Filter by user email or username
                     if user_emails or user_names:
                         author_email = commit.get('author_email', '').lower()
@@ -235,6 +241,14 @@ class BitbucketFetcher:
                 for pr_data in batch:
                     pr = self._pr_to_dict(pr_data)
 
+                    # Fetch additional PR data: activities, comments, and diff stats
+                    pr_id = pr.get('id')
+                    if pr_id:
+                        pr_activities = self._fetch_pr_activities(project, repository, pr_id)
+                        pr_diff_stats = self._fetch_pr_diff_stats(project, repository, pr_id)
+                        pr['activities'] = pr_activities
+                        pr.update(pr_diff_stats)
+
                     # Filter by date if specified
                     if start_ts or end_ts:
                         created_date = datetime.fromtimestamp(pr['created_timestamp'] / 1000)
@@ -259,6 +273,232 @@ class BitbucketFetcher:
 
         print(f"Total pull requests fetched: {len(pull_requests)}")
         return pull_requests
+
+    def _fetch_commit_changes(self, project: str, repository: str, commit_id: str) -> dict:
+        """
+        Fetch changeset/diff statistics for a specific commit.
+
+        Args:
+            project: Bitbucket project key
+            repository: Repository slug
+            commit_id: Commit hash
+
+        Returns:
+            Dictionary with file changes statistics:
+            - files_changed: Number of files changed
+            - lines_added: Total lines added
+            - lines_removed: Total lines removed
+            - file_changes: List of changed files with details
+        """
+        try:
+            # Bitbucket API endpoint for commit changes
+            url = f"{self.bitbucket_url}/rest/api/1.0/projects/{project}/repos/{repository}/commits/{commit_id}/changes"
+            params = {'limit': 1000}  # Get up to 1000 file changes
+
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            changes = data.get('values', [])
+            files_changed = len(changes)
+
+            # Collect file-level statistics
+            file_changes = []
+            for change in changes:
+                file_path = change.get('path', {}).get('toString', '')
+                change_type = change.get('type', 'UNKNOWN')  # MODIFY, ADD, DELETE, etc.
+
+                file_changes.append({
+                    'path': file_path,
+                    'type': change_type
+                })
+
+            # Note: Bitbucket Server API doesn't provide line-level stats in /changes endpoint
+            # To get line counts, we'd need to fetch the actual diff, which is expensive
+            # For now, we'll fetch diff stats if available
+            diff_stats = self._fetch_commit_diff_stats(project, repository, commit_id)
+
+            return {
+                'files_changed': files_changed,
+                'lines_added': diff_stats.get('lines_added', 0),
+                'lines_removed': diff_stats.get('lines_removed', 0),
+                'file_changes': file_changes
+            }
+
+        except Exception as e:
+            # Don't fail the entire fetch if one commit's changes fail
+            return {
+                'files_changed': 0,
+                'lines_added': 0,
+                'lines_removed': 0,
+                'file_changes': []
+            }
+
+    def _fetch_commit_diff_stats(self, project: str, repository: str, commit_id: str) -> dict:
+        """
+        Fetch diff statistics by parsing the actual diff output.
+
+        Args:
+            project: Bitbucket project key
+            repository: Repository slug
+            commit_id: Commit hash
+
+        Returns:
+            Dictionary with lines_added and lines_removed counts
+        """
+        try:
+            # Get the diff for this commit
+            url = f"{self.bitbucket_url}/rest/api/1.0/projects/{project}/repos/{repository}/commits/{commit_id}/diff"
+            params = {'contextLines': 0}  # Minimize context to reduce response size
+
+            response = self.session.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+
+            lines_added = 0
+            lines_removed = 0
+
+            # Parse diffs from response
+            diffs = data.get('diffs', [])
+            for diff in diffs:
+                hunks = diff.get('hunks', [])
+                for hunk in hunks:
+                    segments = hunk.get('segments', [])
+                    for segment in segments:
+                        segment_type = segment.get('type', '')
+                        lines = segment.get('lines', [])
+
+                        if segment_type == 'ADDED':
+                            lines_added += len(lines)
+                        elif segment_type == 'REMOVED':
+                            lines_removed += len(lines)
+
+            return {
+                'lines_added': lines_added,
+                'lines_removed': lines_removed
+            }
+
+        except Exception:
+            # If diff fetching fails, return zeros
+            return {
+                'lines_added': 0,
+                'lines_removed': 0
+            }
+
+    def _fetch_pr_activities(self, project: str, repository: str, pr_id: int) -> dict:
+        """
+        Fetch activities for a pull request (comments, reviews, approvals).
+
+        Args:
+            project: Bitbucket project key
+            repository: Repository slug
+            pr_id: Pull request ID
+
+        Returns:
+            Dictionary with PR activities statistics
+        """
+        try:
+            url = f"{self.bitbucket_url}/rest/api/1.0/projects/{project}/repos/{repository}/pull-requests/{pr_id}/activities"
+            params = {'limit': 1000}
+
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            activities = data.get('values', [])
+
+            comments_count = 0
+            reviews_count = 0
+            approvals_count = 0
+            comments = []
+
+            for activity in activities:
+                action = activity.get('action', '')
+
+                if action == 'COMMENTED':
+                    comments_count += 1
+                    comment = activity.get('comment', {})
+                    comments.append({
+                        'author': comment.get('author', {}).get('name', ''),
+                        'text': comment.get('text', ''),
+                        'created_date': comment.get('createdDate', 0)
+                    })
+                elif action == 'REVIEWED':
+                    reviews_count += 1
+                elif action == 'APPROVED':
+                    approvals_count += 1
+
+            return {
+                'comments_count': comments_count,
+                'reviews_count': reviews_count,
+                'approvals_count': approvals_count,
+                'total_activities': len(activities),
+                'comments': comments[:10]  # Keep first 10 comments
+            }
+
+        except Exception:
+            return {
+                'comments_count': 0,
+                'reviews_count': 0,
+                'approvals_count': 0,
+                'total_activities': 0,
+                'comments': []
+            }
+
+    def _fetch_pr_diff_stats(self, project: str, repository: str, pr_id: int) -> dict:
+        """
+        Fetch diff statistics for a pull request.
+
+        Args:
+            project: Bitbucket project key
+            repository: Repository slug
+            pr_id: Pull request ID
+
+        Returns:
+            Dictionary with PR diff statistics
+        """
+        try:
+            url = f"{self.bitbucket_url}/rest/api/1.0/projects/{project}/repos/{repository}/pull-requests/{pr_id}/diff"
+            params = {'contextLines': 0}
+
+            response = self.session.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+
+            lines_added = 0
+            lines_removed = 0
+            files_changed = 0
+
+            diffs = data.get('diffs', [])
+            files_changed = len(diffs)
+
+            for diff in diffs:
+                hunks = diff.get('hunks', [])
+                for hunk in hunks:
+                    segments = hunk.get('segments', [])
+                    for segment in segments:
+                        segment_type = segment.get('type', '')
+                        lines = segment.get('lines', [])
+
+                        if segment_type == 'ADDED':
+                            lines_added += len(lines)
+                        elif segment_type == 'REMOVED':
+                            lines_removed += len(lines)
+
+            return {
+                'pr_files_changed': files_changed,
+                'pr_lines_added': lines_added,
+                'pr_lines_removed': lines_removed,
+                'pr_lines_modified': lines_added + lines_removed
+            }
+
+        except Exception:
+            return {
+                'pr_files_changed': 0,
+                'pr_lines_added': 0,
+                'pr_lines_removed': 0,
+                'pr_lines_modified': 0
+            }
 
     def _commit_to_dict(self, commit_data: dict) -> dict:
         """

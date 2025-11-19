@@ -197,10 +197,58 @@ class XrayFetcher:
             List of test run dictionaries
 
         Note:
-            Uses Xray REST API endpoints:
+            Uses Xray On-Premise REST API endpoints:
+            1. /rest/tests/1.0/testexec/{key}/testruns - get all test runs for execution
+
+            Alternative Cloud endpoints (auto-detected):
             1. /rest/raven/1.0/api/testexec/{key}/test - get test list
             2. /rest/raven/1.0/api/testrun - get individual test run details
         """
+        # Try on-premise API first
+        try:
+            # On-premise Xray API endpoint - gets all test runs at once
+            testruns_url = f"{self.jira_url}/rest/tests/1.0/testexec/{execution_key}/testruns"
+            testruns_response = self.jira._session.get(testruns_url)
+            testruns_response.raise_for_status()
+            test_runs_data = testruns_response.json()
+
+            if not test_runs_data:
+                print(f"  No test runs found in execution {execution_key}")
+                return []
+
+            # Process test runs from on-premise API
+            test_runs = []
+            for run_data in test_runs_data:
+                # Calculate duration if started and finished times are available
+                duration = None
+                if run_data.get('startedOn') and run_data.get('finishedOn'):
+                    try:
+                        started = datetime.fromisoformat(run_data['startedOn'].replace('Z', '+00:00'))
+                        finished = datetime.fromisoformat(run_data['finishedOn'].replace('Z', '+00:00'))
+                        duration = (finished - started).total_seconds() / 60  # duration in minutes
+                    except Exception:
+                        pass
+
+                test_runs.append({
+                    'id': run_data.get('id'),
+                    'test_key': run_data.get('testKey') or run_data.get('test', {}).get('key'),
+                    'status': run_data.get('status', {}).get('name', 'Unknown') if isinstance(run_data.get('status'), dict) else run_data.get('status', 'Unknown'),
+                    'started_on': run_data.get('startedOn'),
+                    'finished_on': run_data.get('finishedOn'),
+                    'duration_minutes': duration,
+                    'executed_by': run_data.get('executedBy'),
+                    'defects': run_data.get('defects', []),
+                    'examples': run_data.get('examples', []),
+                    'comment': run_data.get('comment', '')
+                })
+
+            print(f"  Found {len(test_runs)} test runs in {execution_key} (on-premise API)")
+            return test_runs
+
+        except Exception as e:
+            print(f"  On-premise API failed: {e}, trying Cloud API...")
+
+        # Fallback to Cloud API if on-premise fails
         try:
             # Step 1: Get list of tests in this execution
             tests_url = f"{self.jira_url}/rest/raven/1.0/api/testexec/{execution_key}/test"
@@ -261,10 +309,11 @@ class XrayFetcher:
                         'comment': ''
                     })
 
+            print(f"  Found {len(test_runs)} test runs in {execution_key} (Cloud API)")
             return test_runs
 
         except Exception as e:
-            print(f"  Warning: Could not fetch test runs for {execution_key}: {e}")
+            print(f"  Warning: Could not fetch test runs for {execution_key} using Cloud API: {e}")
             return []
 
     def _test_execution_to_dict(self, issue) -> dict:
